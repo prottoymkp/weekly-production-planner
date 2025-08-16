@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Weekly Production Planner</title>
+  <style>
+    /* Basic styling for the planner */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 4px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f2f2f2;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    tfoot td {
+      font-weight: bold;
+    }
+
+    button {
+      margin-right: 5px;
+    }
+
+    .numeric-input {
+      width: 80px;
+    }
+
+    .date-input {
+      width: 150px;
+    }
+  </style>
+  <!-- SheetJS library for XLSX export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.7/xlsx.full.min.js"></script>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="addRowBtn">Add Row</button>
+    <button id="add10RowsBtn">Add 10 Rows</button>
+    <button id="sampleDataBtn">Sample Data</button>
+    <button id="runTestsBtn">Run tests</button>
+    <button id="exportBtn">Export XLSX (Table Only)</button>
+  </div>
+
+  <table id="plannerTable">
+    <thead>
+      <tr>
+        <th>Week</th>
+        <th>Date (dd-MMM-yyyy)</th>
+        <th>Article</th>
+        <th>Order Quantity</th>
+        <th>Cutting Plan</th>
+        <th>Cutting Actual</th>
+        <th>Cutting %</th>
+        <th>Stitching Plan</th>
+        <th>Stitching Actual</th>
+        <th>Stitching %</th>
+        <th>Lasting Plan</th>
+        <th>Lasting Actual</th>
+        <th>Lasting %</th>
+        <th>Working Days (week)</th>
+        <th>Remarks</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Dynamic rows will be appended here -->
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="4">Totals</td>
+        <td class="total-cut-plan">0</td>
+        <td class="total-cut-actual">0</td>
+        <td></td>
+        <td class="total-stitch-plan">0</td>
+        <td class="total-stitch-actual">0</td>
+        <td></td>
+        <td class="total-last-plan">0</td>
+        <td class="total-last-actual">0</td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const tableBody = document.querySelector('#plannerTable tbody');
+    const addRowBtn = document.getElementById('addRowBtn');
+    const add10RowsBtn = document.getElementById('add10RowsBtn');
+    const sampleDataBtn = document.getElementById('sampleDataBtn');
+    const runTestsBtn = document.getElementById('runTestsBtn');
+    const exportBtn = document.getElementById('exportBtn');
+
+    /**
+     * Add a new empty row to the table. All inputs are set up
+     * with appropriate event handlers to trigger recalculation.
+     */
+    function addRow() {
+      const tr = document.createElement('tr');
+      // Week cell (read-only)
+      const weekCell = document.createElement('td');
+      weekCell.textContent = '';
+      tr.appendChild(weekCell);
+
+      // Date cell with date picker
+      const dateCell = document.createElement('td');
+      const dateInput = document.createElement('input');
+      dateInput.type = 'date';
+      dateInput.className = 'date-input';
+      dateInput.addEventListener('change', recalcAll);
+      dateCell.appendChild(dateInput);
+      tr.appendChild(dateCell);
+
+      // Article cell
+      const articleCell = document.createElement('td');
+      const articleInput = document.createElement('input');
+      articleInput.type = 'text';
+      articleInput.addEventListener('input', recalcAll);
+      articleCell.appendChild(articleInput);
+      tr.appendChild(articleCell);
+
+      // Order Quantity cell (read-only)
+      const oqCell = document.createElement('td');
+      oqCell.textContent = '';
+      tr.appendChild(oqCell);
+
+      // Cutting Plan
+      const cutPlanCell = document.createElement('td');
+      const cutPlanInput = document.createElement('input');
+      cutPlanInput.type = 'number';
+      cutPlanInput.min = '0';
+      cutPlanInput.step = '1';
+      cutPlanInput.className = 'numeric-input';
+      cutPlanInput.addEventListener('input', recalcAll);
+      cutPlanCell.appendChild(cutPlanInput);
+      tr.appendChild(cutPlanCell);
+
+      // Cutting Actual
+      const cutActCell = document.createElement('td');
+      const cutActInput = document.createElement('input');
+      cutActInput.type = 'number';
+      cutActInput.min = '0';
+      cutActInput.step = '1';
+      cutActInput.className = 'numeric-input';
+      cutActInput.addEventListener('input', recalcAll);
+      cutActCell.appendChild(cutActInput);
+      tr.appendChild(cutActCell);
+
+      // Cutting % (read-only)
+      const cutPctCell = document.createElement('td');
+      cutPctCell.textContent = '';
+      tr.appendChild(cutPctCell);
+
+      // Stitching Plan
+      const stitchPlanCell = document.createElement('td');
+      const stitchPlanInput = document.createElement('input');
+      stitchPlanInput.type = 'number';
+      stitchPlanInput.min = '0';
+      stitchPlanInput.step = '1';
+      stitchPlanInput.className = 'numeric-input';
+      stitchPlanInput.addEventListener('input', recalcAll);
+      stitchPlanCell.appendChild(stitchPlanInput);
+      tr.appendChild(stitchPlanCell);
+
+      // Stitching Actual
+      const stitchActCell = document.createElement('td');
+      const stitchActInput = document.createElement('input');
+      stitchActInput.type = 'number';
+      stitchActInput.min = '0';
+      stitchActInput.step = '1';
+      stitchActInput.className = 'numeric-input';
+      stitchActInput.addEventListener('input', recalcAll);
+      stitchActCell.appendChild(stitchActInput);
+      tr.appendChild(stitchActCell);
+
+      // Stitching % (read-only)
+      const stitchPctCell = document.createElement('td');
+      stitchPctCell.textContent = '';
+      tr.appendChild(stitchPctCell);
+
+      // Lasting Plan
+      const lastPlanCell = document.createElement('td');
+      const lastPlanInput = document.createElement('input');
+      lastPlanInput.type = 'number';
+      lastPlanInput.min = '0';
+      lastPlanInput.step = '1';
+      lastPlanInput.className = 'numeric-input';
+      lastPlanInput.addEventListener('input', recalcAll);
+      lastPlanCell.appendChild(lastPlanInput);
+      tr.appendChild(lastPlanCell);
+
+      // Lasting Actual
+      const lastActCell = document.createElement('td');
+      const lastActInput = document.createElement('input');
+      lastActInput.type = 'number';
+      lastActInput.min = '0';
+      lastActInput.step = '1';
+      lastActInput.className = 'numeric-input';
+      lastActInput.addEventListener('input', recalcAll);
+      lastActCell.appendChild(lastActInput);
+      tr.appendChild(lastActCell);
+
+      // Lasting % (read-only)
+      const lastPctCell = document.createElement('td');
+      lastPctCell.textContent = '';
+      tr.appendChild(lastPctCell);
+
+      // Working Days (read-only)
+      const wdCell = document.createElement('td');
+      wdCell.textContent = '';
+      tr.appendChild(wdCell);
+
+      // Remarks
+      const remarksCell = document.createElement('td');
+      const remarksInput = document.createElement('input');
+      remarksInput.type = 'text';
+      remarksInput.addEventListener('input', recalcAll);
+      remarksCell.appendChild(remarksInput);
+      tr.appendChild(remarksCell);
+
+      // Actions
+      const actionCell = document.createElement('td');
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', function() {
+        tableBody.removeChild(tr);
+        recalcAll();
+      });
+      actionCell.appendChild(delBtn);
+      tr.appendChild(actionCell);
+
+      tableBody.appendChild(tr);
+    }
+
+    /**
+     * Remove all rows from the table body.
+     */
+    function clearRows() {
+      while (tableBody.firstChild) {
+        tableBody.removeChild(tableBody.firstChild);
+      }
+    }
+
+    /**
+     * Populate the table with predefined sample data. This will first
+     * clear existing rows to avoid duplication on repeated calls.
+     */
+    function addSampleData() {
+      clearRows();
+      const samples = [
+        {
+          date: '2025-08-05',
+          article: 'A1',
+          cutPlan: 100,
+          cutAct: 80,
+          stitchPlan: 90,
+          stitchAct: 70,
+          lastPlan: 80,
+          lastAct: 60,
+          remarks: ''
+        },
+        {
+          date: '2025-08-15',
+          article: 'A1',
+          cutPlan: 200,
+          cutAct: 150,
+          stitchPlan: 180,
+          stitchAct: 160,
+          lastPlan: 170,
+          lastAct: 150,
+          remarks: ''
+        },
+        {
+          date: '2025-09-05',
+          article: 'B2',
+          cutPlan: 120,
+          cutAct: 100,
+          stitchPlan: 110,
+          stitchAct: 90,
+          lastPlan: 100,
+          lastAct: 85,
+          remarks: ''
+        }
+      ];
+      samples.forEach(sample => {
+        addRow();
+        const row = tableBody.lastChild;
+        const cells = row.querySelectorAll('td');
+        cells[1].querySelector('input').value = sample.date;
+        cells[2].querySelector('input').value = sample.article;
+        cells[4].querySelector('input').value = sample.cutPlan;
+        cells[5].querySelector('input').value = sample.cutAct;
+        cells[7].querySelector('input').value = sample.stitchPlan;
+        cells[8].querySelector('input').value = sample.stitchAct;
+        cells[10].querySelector('input').value = sample.lastPlan;
+        cells[11].querySelector('input').value = sample.lastAct;
+        cells[14].querySelector('input').value = sample.remarks;
+      });
+      recalcAll();
+    }
+
+    /**
+     * Trigger a full recalculation of all derived values.
+     */
+    function recalcAll() {
+      recalcWeeks();
+      recalcOrderQty();
+      recalcPercentages();
+      recalcWorkingDays();
+      updateFooterTotals();
+    }
+
+    /**
+     * Return the short English name of a month.
+     */
+    function getMonthShort(monthIndex) {
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return months[monthIndex];
+    }
+
+    /**
+     * Determine the week label (W1–W5) given an ISO date string.
+     * Returns empty string for invalid or blank dates.
+     */
+    function getWeekLabel(dateStr) {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      if (isNaN(date)) return '';
+      const day = date.getDate();
+      const monthShort = getMonthShort(date.getMonth());
+      let weekNum;
+      if (day >= 1 && day <= 7) weekNum = 'W1';
+      else if (day <= 14) weekNum = 'W2';
+      else if (day <= 21) weekNum = 'W3';
+      else if (day <= 28) weekNum = 'W4';
+      else weekNum = 'W5';
+      return weekNum + '-' + monthShort;
+    }
+
+    /**
+     * Update the Week column for each row based on its date.
+     */
+    function recalcWeeks() {
+      Array.from(tableBody.children).forEach(row => {
+        const dateInput = row.cells[1].querySelector('input');
+        const weekCell = row.cells[0];
+        const weekLabel = dateInput && dateInput.value ? getWeekLabel(dateInput.value) : '';
+        weekCell.textContent = weekLabel;
+      });
+    }
+
+    /**
+     * Calculate Order Quantity per (article, month) bucket using the max
+     * of Cutting Plan, Stitching Plan, and Lasting Plan sums. Values
+     * propagate to all rows belonging to the same bucket.
+     */
+    function recalcOrderQty() {
+      const buckets = {};
+      // First pass: aggregate sums
+      Array.from(tableBody.children).forEach(row => {
+        const article = row.cells[2].querySelector('input').value.trim().toLowerCase();
+        const dateStr = row.cells[1].querySelector('input').value;
+        if (!article || !dateStr) return;
+        const date = new Date(dateStr);
+        if (isNaN(date)) return;
+        const key = `${article}-${date.getFullYear()}-${date.getMonth()}`;
+        if (!buckets[key]) {
+          buckets[key] = { cut: 0, stitch: 0, last: 0 };
+        }
+        const cutPlan = parseInt(row.cells[4].querySelector('input').value) || 0;
+        const stitchPlan = parseInt(row.cells[7].querySelector('input').value) || 0;
+        const lastPlan = parseInt(row.cells[10].querySelector('input').value) || 0;
+        buckets[key].cut += cutPlan;
+        buckets[key].stitch += stitchPlan;
+        buckets[key].last += lastPlan;
+      });
+      // Second pass: assign max values
+      Array.from(tableBody.children).forEach(row => {
+        const oqCell = row.cells[3];
+        const article = row.cells[2].querySelector('input').value.trim().toLowerCase();
+        const dateStr = row.cells[1].querySelector('input').value;
+        if (!article || !dateStr) {
+          oqCell.textContent = '';
+          return;
+        }
+        const date = new Date(dateStr);
+        if (isNaN(date)) {
+          oqCell.textContent = '';
+          return;
+        }
+        const key = `${article}-${date.getFullYear()}-${date.getMonth()}`;
+        const bucket = buckets[key];
+        if (!bucket) {
+          oqCell.textContent = '';
+        } else {
+          const maxVal = Math.max(bucket.cut, bucket.stitch, bucket.last);
+          oqCell.textContent = maxVal ? String(maxVal) : '';
+        }
+      });
+    }
+
+    /**
+     * Calculate the percentage values for Cutting, Stitching, and Lasting.
+     * Displays one decimal place followed by a percent sign when the
+     * respective plan is greater than zero.
+     */
+    function recalcPercentages() {
+      Array.from(tableBody.children).forEach(row => {
+        // Cutting percentage
+        const cutPlan = parseInt(row.cells[4].querySelector('input').value) || 0;
+        const cutAct = parseInt(row.cells[5].querySelector('input').value) || 0;
+        const cutPctCell = row.cells[6];
+        if (cutPlan > 0) {
+          const pct = (cutAct / cutPlan) * 100;
+          cutPctCell.textContent = pct.toFixed(1) + '%';
+        } else {
+          cutPctCell.textContent = '';
+        }
+
+        // Stitching percentage
+        const stitchPlan = parseInt(row.cells[7].querySelector('input').value) || 0;
+        const stitchAct = parseInt(row.cells[8].querySelector('input').value) || 0;
+        const stitchPctCell = row.cells[9];
+        if (stitchPlan > 0) {
+          const pct = (stitchAct / stitchPlan) * 100;
+          stitchPctCell.textContent = pct.toFixed(1) + '%';
+        } else {
+          stitchPctCell.textContent = '';
+        }
+
+        // Lasting percentage
+        const lastPlan = parseInt(row.cells[10].querySelector('input').value) || 0;
+        const lastAct = parseInt(row.cells[11].querySelector('input').value) || 0;
+        const lastPctCell = row.cells[12];
+        if (lastPlan > 0) {
+          const pct = (lastAct / lastPlan) * 100;
+          lastPctCell.textContent = pct.toFixed(1) + '%';
+        } else {
+          lastPctCell.textContent = '';
+        }
+      });
+    }
+
+    /**
+     * Helper function to determine the number of days in a month.
+     */
+    function daysInMonth(year, month) {
+      return new Date(year, month + 1, 0).getDate();
+    }
+
+    /**
+     * Calculate working days within the week bucket for each row.
+     * Friday (day index 5) is excluded; all other days count as working days.
+     */
+    function recalcWorkingDays() {
+      Array.from(tableBody.children).forEach(row => {
+        const wdCell = row.cells[13];
+        const dateStr = row.cells[1].querySelector('input').value;
+        if (!dateStr) {
+          wdCell.textContent = '';
+          return;
+        }
+        const date = new Date(dateStr);
+        if (isNaN(date)) {
+          wdCell.textContent = '';
+          return;
+        }
+        const day = date.getDate();
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        // Determine the start of the week window within the month
+        let startDay;
+        if (day >= 1 && day <= 7) startDay = 1;
+        else if (day <= 14) startDay = 8;
+        else if (day <= 21) startDay = 15;
+        else if (day <= 28) startDay = 22;
+        else startDay = 29;
+        const endDay = Math.min(startDay + 6, daysInMonth(year, month));
+        let count = 0;
+        for (let d = startDay; d <= endDay; d++) {
+          const dDate = new Date(year, month, d);
+          const weekday = dDate.getDay(); // Sunday=0, Friday=5
+          if (weekday !== 5) {
+            count++;
+          }
+        }
+        wdCell.textContent = count;
+      });
+    }
+
+    /**
+     * Sum the plan and actual values for the footer totals.
+     */
+    function updateFooterTotals() {
+      let cutPlanTotal = 0;
+      let cutActTotal = 0;
+      let stitchPlanTotal = 0;
+      let stitchActTotal = 0;
+      let lastPlanTotal = 0;
+      let lastActTotal = 0;
+      Array.from(tableBody.children).forEach(row => {
+        cutPlanTotal += parseInt(row.cells[4].querySelector('input').value) || 0;
+        cutActTotal += parseInt(row.cells[5].querySelector('input').value) || 0;
+        stitchPlanTotal += parseInt(row.cells[7].querySelector('input').value) || 0;
+        stitchActTotal += parseInt(row.cells[8].querySelector('input').value) || 0;
+        lastPlanTotal += parseInt(row.cells[10].querySelector('input').value) || 0;
+        lastActTotal += parseInt(row.cells[11].querySelector('input').value) || 0;
+      });
+      document.querySelector('.total-cut-plan').textContent = cutPlanTotal;
+      document.querySelector('.total-cut-actual').textContent = cutActTotal;
+      document.querySelector('.total-stitch-plan').textContent = stitchPlanTotal;
+      document.querySelector('.total-stitch-actual').textContent = stitchActTotal;
+      document.querySelector('.total-last-plan').textContent = lastPlanTotal;
+      document.querySelector('.total-last-actual').textContent = lastActTotal;
+    }
+
+    /**
+     * Run acceptance tests in console. Asserts key behaviours for weeks,
+     * order quantities, percentages, working days and totals.
+     */
+    function runTests() {
+      const logs = [];
+      function assert(condition, message) {
+        if (!condition) {
+          console.error('Test failed:', message);
+          logs.push('FAIL: ' + message);
+        }
+      }
+      // Populate with sample data for testing
+      addSampleData();
+      const rows = Array.from(tableBody.children);
+      function getWeek(rowIndex) {
+        return rows[rowIndex].cells[0].textContent;
+      }
+      // 1. Week computation
+      assert(getWeek(0) === 'W1-Aug', '05-Aug-2025 should be W1-Aug, got ' + getWeek(0));
+      assert(getWeek(1) === 'W3-Aug', '15-Aug-2025 should be W3-Aug, got ' + getWeek(1));
+      assert(getWeek(2) === 'W1-Sep', '05-Sep-2025 should be W1-Sep, got ' + getWeek(2));
+
+      // 2. Order Quantity logic
+      function getOQ(rowIndex) {
+        return rows[rowIndex].cells[3].textContent;
+      }
+      assert(getOQ(0) === '300', 'Order Quantity for A1 Aug should be 300');
+      assert(getOQ(1) === '300', 'Order Quantity for A1 Aug second row should be 300');
+      assert(getOQ(2) === '120', 'Order Quantity for B2 Sep should be 120');
+
+      // 3. Percentages
+      function getPct(rowIndex, colIndex) {
+        return rows[rowIndex].cells[colIndex].textContent;
+      }
+      assert(getPct(0, 6) === '80.0%', 'Cutting% row0 should be 80.0%');
+      assert(getPct(0, 9) === '77.8%', 'Stitching% row0 should be 77.8%');
+      assert(getPct(0, 12) === '75.0%', 'Lasting% row0 should be 75.0%');
+
+      // 4. Working Days (week)
+      function getWD(rowIndex) {
+        return parseInt(rows[rowIndex].cells[13].textContent);
+      }
+      // Helper to compute expected working days using same logic
+      function expectedWorkingDays(dateStr) {
+        const date = new Date(dateStr);
+        const day = date.getDate();
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        let start;
+        if (day <= 7) start = 1;
+        else if (day <= 14) start = 8;
+        else if (day <= 21) start = 15;
+        else if (day <= 28) start = 22;
+        else start = 29;
+        const end = Math.min(start + 6, daysInMonth(year, month));
+        let count = 0;
+        for (let d = start; d <= end; d++) {
+          const dt = new Date(year, month, d);
+          if (dt.getDay() !== 5) count++;
+        }
+        return count;
+      }
+      const expected0 = expectedWorkingDays('2025-08-05');
+      const expected1 = expectedWorkingDays('2025-08-15');
+      const expected2 = expectedWorkingDays('2025-09-05');
+      assert(getWD(0) === expected0, 'Working days row0 expected ' + expected0 + ', got ' + getWD(0));
+      assert(getWD(1) === expected1, 'Working days row1 expected ' + expected1 + ', got ' + getWD(1));
+      assert(getWD(2) === expected2, 'Working days row2 expected ' + expected2 + ', got ' + getWD(2));
+
+      // 5. Footer totals
+      const totals = {
+        cutPlan: parseInt(document.querySelector('.total-cut-plan').textContent),
+        cutAct: parseInt(document.querySelector('.total-cut-actual').textContent),
+        stitchPlan: parseInt(document.querySelector('.total-stitch-plan').textContent),
+        stitchAct: parseInt(document.querySelector('.total-stitch-actual').textContent),
+        lastPlan: parseInt(document.querySelector('.total-last-plan').textContent),
+        lastAct: parseInt(document.querySelector('.total-last-actual').textContent)
+      };
+      assert(totals.cutPlan === 100 + 200 + 120, 'Total Cutting Plan should be 420');
+      assert(totals.cutAct === 80 + 150 + 100, 'Total Cutting Actual should be 330');
+      assert(totals.stitchPlan === 90 + 180 + 110, 'Total Stitching Plan should be 380');
+      assert(totals.stitchAct === 70 + 160 + 90, 'Total Stitching Actual should be 320');
+      assert(totals.lastPlan === 80 + 170 + 100, 'Total Lasting Plan should be 350');
+      assert(totals.lastAct === 60 + 150 + 85, 'Total Lasting Actual should be 295');
+
+      if (logs.length === 0) {
+        console.log('All tests passed');
+      }
+    }
+
+    /**
+     * Export the table (excluding the Actions column) to an XLSX file.
+     */
+    function exportTable() {
+      const wb = XLSX.utils.book_new();
+      const wsData = [];
+      // Header row
+      const headers = [];
+      document.querySelectorAll('#plannerTable thead th').forEach((th, idx) => {
+        if (idx !== 15) {
+          headers.push(th.textContent.trim());
+        }
+      });
+      wsData.push(headers);
+      // Body rows
+      Array.from(tableBody.children).forEach(row => {
+        const rowData = [];
+        row.querySelectorAll('td').forEach((td, idx) => {
+          if (idx === 15) return; // skip Actions
+          if (idx === 1) {
+            // date column: convert to dd-MMM-yyyy
+            const input = td.querySelector('input');
+            if (input && input.value) {
+              const d = new Date(input.value);
+              if (!isNaN(d)) {
+                const day = ('0' + d.getDate()).slice(-2);
+                const monthShort = getMonthShort(d.getMonth());
+                const year = d.getFullYear();
+                rowData.push(day + '-' + monthShort + '-' + year);
+              } else {
+                rowData.push('');
+              }
+            } else {
+              rowData.push('');
+            }
+          } else if ([0, 3, 6, 9, 12, 13].includes(idx)) {
+            // read-only cells (Week, Order Qty, percentages, working days)
+            rowData.push(td.textContent.trim());
+          } else {
+            const input = td.querySelector('input');
+            if (input) {
+              rowData.push(input.value);
+            } else {
+              rowData.push(td.textContent.trim());
+            }
+          }
+        });
+        wsData.push(rowData);
+      });
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      XLSX.utils.book_append_sheet(wb, ws, 'Weekly Production Plan');
+      XLSX.writeFile(wb, 'weekly_production_plan.xlsx');
+    }
+
+    // Attach event listeners to toolbar buttons
+    addRowBtn.addEventListener('click', function() {
+      addRow();
+      recalcAll();
+    });
+    add10RowsBtn.addEventListener('click', function() {
+      for (let i = 0; i < 10; i++) {
+        addRow();
+      }
+      recalcAll();
+    });
+    sampleDataBtn.addEventListener('click', function() {
+      addSampleData();
+    });
+    runTestsBtn.addEventListener('click', function() {
+      runTests();
+    });
+    exportBtn.addEventListener('click', function() {
+      exportTable();
+    });
+  });
+  </script>
+</body>
+</html>
