@@ -45,7 +45,10 @@
     }
   </style>
   <!-- SheetJS library for XLSX export -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.7/xlsx.full.min.js"></script>
+  <!-- The 0.18.7 release is not available on the CDN which caused the
+       "XLSX library not loaded" alert.  Falling back to the latest version
+       provided by the CDN fixes the issue. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
   <div id="toolbar">
