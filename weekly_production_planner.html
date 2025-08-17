@@ -60,7 +60,7 @@
     <thead>
       <tr>
         <th>Week</th>
-        <th>Date (dd-MMM-yyyy)</th>
+        <th>Date</th>
         <th>Article</th>
         <th>Order Quantity</th>
         <th>Cutting Plan</th>
@@ -119,17 +119,12 @@
       weekCell.textContent = '';
       tr.appendChild(weekCell);
 
-      // Date cell (dd-MMM-yyyy)
+      // Date cell
       const dateCell = document.createElement('td');
       const dateInput = document.createElement('input');
-      dateInput.type = 'text';
-      dateInput.placeholder = 'dd-MMM-yyyy';
+      dateInput.type = 'date';
       dateInput.className = 'date-input';
-      dateInput.addEventListener('blur', () => {
-        const d = parseDateStr(dateInput.value.trim());
-        dateInput.value = d ? formatDate(d) : '';
-        recalcAll();
-      });
+      dateInput.addEventListener('input', recalcAll);
       dateCell.appendChild(dateInput);
       tr.appendChild(dateCell);
 
@@ -277,7 +272,7 @@
       clearRows();
       const samples = [
         {
-          date: '05-Aug-2025',
+          date: '2025-08-05',
           article: 'A1',
           cutPlan: 100,
           cutAct: 80,
@@ -288,7 +283,7 @@
           remarks: ''
         },
         {
-          date: '15-Aug-2025',
+          date: '2025-08-15',
           article: 'A1',
           cutPlan: 200,
           cutAct: 150,
@@ -299,7 +294,7 @@
           remarks: ''
         },
         {
-          date: '05-Sep-2025',
+          date: '2025-09-05',
           article: 'B2',
           cutPlan: 120,
           cutAct: 100,
@@ -347,11 +342,17 @@
     }
 
     /**
-     * Parse a date string in dd-MMM-yyyy format.
+     * Parse a date string in either yyyy-MM-dd or dd-MMM-yyyy format.
      * Returns a Date object or null if invalid.
      */
     function parseDateStr(str) {
       if (!str) return null;
+      // Handle native date input format yyyy-MM-dd
+      if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+        const [year, month, day] = str.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      }
+      // Fallback to dd-MMM-yyyy
       const parts = str.split('-');
       if (parts.length !== 3) return null;
       const day = parseInt(parts[0], 10);
