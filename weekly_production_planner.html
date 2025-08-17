@@ -136,9 +136,9 @@
       articleCell.appendChild(articleInput);
       tr.appendChild(articleCell);
 
-      // Order Quantity cell (read-only)
+      // Order Quantity cell (read-only, defaults to 0)
       const oqCell = document.createElement('td');
-      oqCell.textContent = '';
+      oqCell.textContent = '0';
       tr.appendChild(oqCell);
 
       // Cutting Plan
@@ -148,6 +148,7 @@
       cutPlanInput.min = '0';
       cutPlanInput.step = '1';
       cutPlanInput.className = 'numeric-input';
+      cutPlanInput.value = '0';
       cutPlanInput.addEventListener('input', recalcAll);
       cutPlanCell.appendChild(cutPlanInput);
       tr.appendChild(cutPlanCell);
@@ -159,13 +160,14 @@
       cutActInput.min = '0';
       cutActInput.step = '1';
       cutActInput.className = 'numeric-input';
+      cutActInput.value = '0';
       cutActInput.addEventListener('input', recalcAll);
       cutActCell.appendChild(cutActInput);
       tr.appendChild(cutActCell);
 
       // Cutting % (read-only)
       const cutPctCell = document.createElement('td');
-      cutPctCell.textContent = '';
+      cutPctCell.textContent = '0%';
       tr.appendChild(cutPctCell);
 
       // Stitching Plan
@@ -175,6 +177,7 @@
       stitchPlanInput.min = '0';
       stitchPlanInput.step = '1';
       stitchPlanInput.className = 'numeric-input';
+      stitchPlanInput.value = '0';
       stitchPlanInput.addEventListener('input', recalcAll);
       stitchPlanCell.appendChild(stitchPlanInput);
       tr.appendChild(stitchPlanCell);
@@ -186,13 +189,14 @@
       stitchActInput.min = '0';
       stitchActInput.step = '1';
       stitchActInput.className = 'numeric-input';
+      stitchActInput.value = '0';
       stitchActInput.addEventListener('input', recalcAll);
       stitchActCell.appendChild(stitchActInput);
       tr.appendChild(stitchActCell);
 
       // Stitching % (read-only)
       const stitchPctCell = document.createElement('td');
-      stitchPctCell.textContent = '';
+      stitchPctCell.textContent = '0%';
       tr.appendChild(stitchPctCell);
 
       // Lasting Plan
@@ -202,6 +206,7 @@
       lastPlanInput.min = '0';
       lastPlanInput.step = '1';
       lastPlanInput.className = 'numeric-input';
+      lastPlanInput.value = '0';
       lastPlanInput.addEventListener('input', recalcAll);
       lastPlanCell.appendChild(lastPlanInput);
       tr.appendChild(lastPlanCell);
@@ -213,18 +218,19 @@
       lastActInput.min = '0';
       lastActInput.step = '1';
       lastActInput.className = 'numeric-input';
+      lastActInput.value = '0';
       lastActInput.addEventListener('input', recalcAll);
       lastActCell.appendChild(lastActInput);
       tr.appendChild(lastActCell);
 
       // Lasting % (read-only)
       const lastPctCell = document.createElement('td');
-      lastPctCell.textContent = '';
+      lastPctCell.textContent = '0%';
       tr.appendChild(lastPctCell);
 
       // Working Days (read-only)
       const wdCell = document.createElement('td');
-      wdCell.textContent = '';
+      wdCell.textContent = '0';
       tr.appendChild(wdCell);
 
       // Remarks
@@ -397,21 +403,21 @@
         const article = row.cells[2].querySelector('input').value.trim().toLowerCase();
         const dateStr = row.cells[1].querySelector('input').value;
         if (!article || !dateStr) {
-          oqCell.textContent = '';
+          oqCell.textContent = '0';
           return;
         }
         const date = new Date(dateStr);
         if (isNaN(date)) {
-          oqCell.textContent = '';
+          oqCell.textContent = '0';
           return;
         }
         const key = `${article}-${date.getFullYear()}-${date.getMonth()}`;
         const bucket = buckets[key];
         if (!bucket) {
-          oqCell.textContent = '';
+          oqCell.textContent = '0';
         } else {
           const maxVal = Math.max(bucket.cut, bucket.stitch, bucket.last);
-          oqCell.textContent = maxVal ? String(maxVal) : '';
+          oqCell.textContent = String(maxVal || 0);
         }
       });
     }
@@ -431,7 +437,7 @@
           const pct = (cutAct / cutPlan) * 100;
           cutPctCell.textContent = pct.toFixed(1) + '%';
         } else {
-          cutPctCell.textContent = '';
+          cutPctCell.textContent = '0%';
         }
 
         // Stitching percentage
@@ -442,7 +448,7 @@
           const pct = (stitchAct / stitchPlan) * 100;
           stitchPctCell.textContent = pct.toFixed(1) + '%';
         } else {
-          stitchPctCell.textContent = '';
+          stitchPctCell.textContent = '0%';
         }
 
         // Lasting percentage
@@ -453,7 +459,7 @@
           const pct = (lastAct / lastPlan) * 100;
           lastPctCell.textContent = pct.toFixed(1) + '%';
         } else {
-          lastPctCell.textContent = '';
+          lastPctCell.textContent = '0%';
         }
       });
     }
@@ -474,12 +480,12 @@
         const wdCell = row.cells[13];
         const dateStr = row.cells[1].querySelector('input').value;
         if (!dateStr) {
-          wdCell.textContent = '';
+          wdCell.textContent = '0';
           return;
         }
         const date = new Date(dateStr);
         if (isNaN(date)) {
-          wdCell.textContent = '';
+          wdCell.textContent = '0';
           return;
         }
         const day = date.getDate();
@@ -636,13 +642,15 @@
         }
       });
       wsData.push(headers);
+      const numericCols = new Set([3,4,5,7,8,10,11,13]);
+      const percentCols = new Set([6,9,12]);
       // Body rows
       Array.from(tableBody.children).forEach(row => {
         const rowData = [];
         row.querySelectorAll('td').forEach((td, idx) => {
           if (idx === 15) return; // skip Actions
           if (idx === 1) {
-            // date column: convert to dd-MMM-yyyy
+            // date column: convert to dd-MMM-yyyy, default 0
             const input = td.querySelector('input');
             if (input && input.value) {
               const d = new Date(input.value);
@@ -652,20 +660,25 @@
                 const year = d.getFullYear();
                 rowData.push(day + '-' + monthShort + '-' + year);
               } else {
-                rowData.push('');
+                rowData.push('0');
               }
             } else {
-              rowData.push('');
+              rowData.push('0');
             }
-          } else if ([0, 3, 6, 9, 12, 13].includes(idx)) {
-            // read-only cells (Week, Order Qty, percentages, working days)
-            rowData.push(td.textContent.trim());
           } else {
             const input = td.querySelector('input');
+            let val = '';
             if (input) {
-              rowData.push(input.value);
+              val = input.value.trim();
             } else {
-              rowData.push(td.textContent.trim());
+              val = td.textContent.trim();
+            }
+            if (numericCols.has(idx)) {
+              rowData.push(val === '' ? 0 : Number(val));
+            } else if (percentCols.has(idx)) {
+              rowData.push(val === '' ? '0%' : val);
+            } else {
+              rowData.push(val);
             }
           }
         });
