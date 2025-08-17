@@ -51,9 +51,9 @@
   <div id="toolbar">
     <button id="addRowBtn">Add Row</button>
     <button id="add10RowsBtn">Add 10 Rows</button>
-    <button id="sampleDataBtn">Sample Data</button>
-    <button id="runTestsBtn">Run tests</button>
-    <button id="exportBtn">Export XLSX (Table Only)</button>
+    <button id="sampleDataBtn" type="button">Sample Data</button>
+    <button id="runTestsBtn" type="button">Run tests</button>
+    <button id="exportBtn" type="button">Export XLSX (Table Only)</button>
   </div>
 
   <table id="plannerTable">
@@ -664,58 +664,23 @@
      * Export the table (excluding the Actions column) to an XLSX file.
      */
     function exportTable() {
-      const wb = XLSX.utils.book_new();
-      const wsData = [];
-      // Header row
-      const headers = [];
-      document.querySelectorAll('#plannerTable thead th').forEach((th, idx) => {
-        if (idx !== 15) {
-          headers.push(th.textContent.trim());
-        }
+      if (typeof XLSX === 'undefined') {
+        alert('XLSX library not loaded');
+        return;
+      }
+
+      const tableClone = document.getElementById('plannerTable').cloneNode(true);
+
+      // Remove the Actions column
+      tableClone.querySelectorAll('th:last-child, td:last-child').forEach(el => el.remove());
+
+      // Replace inputs with their current values
+      tableClone.querySelectorAll('input').forEach(input => {
+        const cell = input.parentElement;
+        cell.textContent = input.value;
       });
-      wsData.push(headers);
-      const numericCols = new Set([3,4,5,7,8,10,11,13]);
-      const percentCols = new Set([6,9,12]);
-      // Body rows
-      Array.from(tableBody.children).forEach(row => {
-        const rowData = [];
-        row.querySelectorAll('td').forEach((td, idx) => {
-          if (idx === 15) return; // skip Actions
-          if (idx === 1) {
-            // date column: convert to dd-MMM-yyyy
-            const input = td.querySelector('input');
-            const d = input ? parseDateStr(input.value) : null;
-            rowData.push(d ? formatDate(d) : '');
-          } else {
-            const input = td.querySelector('input');
-            let val = '';
-            if (input) {
-              val = input.value.trim();
-            } else {
-              val = td.textContent.trim();
-            }
-            if (numericCols.has(idx)) {
-              rowData.push(val === '' ? 0 : Number(val));
-            } else if (percentCols.has(idx)) {
-              rowData.push(val === '' ? '0%' : val);
-            } else {
-              rowData.push(val);
-            }
-          }
-        });
-        wsData.push(rowData);
-      });
-      // Footer totals
-      const footerData = [];
-      document.querySelectorAll('#plannerTable tfoot td').forEach((td, idx) => {
-        if (idx !== 15) {
-          const text = td.textContent.trim();
-          footerData.push(numericCols.has(idx) ? (text === '' ? 0 : Number(text)) : text);
-        }
-      });
-      wsData.push(footerData);
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
-      XLSX.utils.book_append_sheet(wb, ws, 'Weekly Production Plan');
+
+      const wb = XLSX.utils.table_to_book(tableClone, {sheet: 'Weekly Production Plan'});
       XLSX.writeFile(wb, 'weekly_production_plan.xlsx');
     }
 
