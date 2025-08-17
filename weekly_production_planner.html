@@ -119,12 +119,17 @@
       weekCell.textContent = '';
       tr.appendChild(weekCell);
 
-      // Date cell with date picker
+      // Date cell (dd-MMM-yyyy)
       const dateCell = document.createElement('td');
       const dateInput = document.createElement('input');
-      dateInput.type = 'date';
+      dateInput.type = 'text';
+      dateInput.placeholder = 'dd-MMM-yyyy';
       dateInput.className = 'date-input';
-      dateInput.addEventListener('change', recalcAll);
+      dateInput.addEventListener('blur', () => {
+        const d = parseDateStr(dateInput.value.trim());
+        dateInput.value = d ? formatDate(d) : '';
+        recalcAll();
+      });
       dateCell.appendChild(dateInput);
       tr.appendChild(dateCell);
 
@@ -272,7 +277,7 @@
       clearRows();
       const samples = [
         {
-          date: '2025-08-05',
+          date: '05-Aug-2025',
           article: 'A1',
           cutPlan: 100,
           cutAct: 80,
@@ -283,7 +288,7 @@
           remarks: ''
         },
         {
-          date: '2025-08-15',
+          date: '15-Aug-2025',
           article: 'A1',
           cutPlan: 200,
           cutAct: 150,
@@ -294,7 +299,7 @@
           remarks: ''
         },
         {
-          date: '2025-09-05',
+          date: '05-Sep-2025',
           article: 'B2',
           cutPlan: 120,
           cutAct: 100,
@@ -342,13 +347,40 @@
     }
 
     /**
+     * Parse a date string in dd-MMM-yyyy format.
+     * Returns a Date object or null if invalid.
+     */
+    function parseDateStr(str) {
+      if (!str) return null;
+      const parts = str.split('-');
+      if (parts.length !== 3) return null;
+      const day = parseInt(parts[0], 10);
+      const monthShort = parts[1].toLowerCase();
+      const year = parseInt(parts[2], 10);
+      const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+      const monthIndex = months.indexOf(monthShort);
+      if (monthIndex === -1 || isNaN(day) || isNaN(year)) return null;
+      return new Date(year, monthIndex, day);
+    }
+
+    /**
+     * Format a Date object as dd-MMM-yyyy.
+     */
+    function formatDate(date) {
+      const day = ('0' + date.getDate()).slice(-2);
+      const monthShort = getMonthShort(date.getMonth());
+      const year = date.getFullYear();
+      return `${day}-${monthShort}-${year}`;
+    }
+
+    /**
      * Determine the week label (W1–W5) given an ISO date string.
      * Returns empty string for invalid or blank dates.
      */
     function getWeekLabel(dateStr) {
       if (!dateStr) return '';
-      const date = new Date(dateStr);
-      if (isNaN(date)) return '';
+      const date = parseDateStr(dateStr);
+      if (!date) return '';
       const day = date.getDate();
       const monthShort = getMonthShort(date.getMonth());
       let weekNum;
@@ -384,8 +416,8 @@
         const article = row.cells[2].querySelector('input').value.trim().toLowerCase();
         const dateStr = row.cells[1].querySelector('input').value;
         if (!article || !dateStr) return;
-        const date = new Date(dateStr);
-        if (isNaN(date)) return;
+        const date = parseDateStr(dateStr);
+        if (!date) return;
         const key = `${article}-${date.getFullYear()}-${date.getMonth()}`;
         if (!buckets[key]) {
           buckets[key] = { cut: 0, stitch: 0, last: 0 };
@@ -406,8 +438,8 @@
           oqCell.textContent = '0';
           return;
         }
-        const date = new Date(dateStr);
-        if (isNaN(date)) {
+        const date = parseDateStr(dateStr);
+        if (!date) {
           oqCell.textContent = '0';
           return;
         }
@@ -483,8 +515,8 @@
           wdCell.textContent = '0';
           return;
         }
-        const date = new Date(dateStr);
-        if (isNaN(date)) {
+        const date = parseDateStr(dateStr);
+        if (!date) {
           wdCell.textContent = '0';
           return;
         }
@@ -582,7 +614,7 @@
       }
       // Helper to compute expected working days using same logic
       function expectedWorkingDays(dateStr) {
-        const date = new Date(dateStr);
+        const date = parseDateStr(dateStr);
         const day = date.getDate();
         const year = date.getFullYear();
         const month = date.getMonth();
@@ -600,9 +632,9 @@
         }
         return count;
       }
-      const expected0 = expectedWorkingDays('2025-08-05');
-      const expected1 = expectedWorkingDays('2025-08-15');
-      const expected2 = expectedWorkingDays('2025-09-05');
+      const expected0 = expectedWorkingDays('05-Aug-2025');
+      const expected1 = expectedWorkingDays('15-Aug-2025');
+      const expected2 = expectedWorkingDays('05-Sep-2025');
       assert(getWD(0) === expected0, 'Working days row0 expected ' + expected0 + ', got ' + getWD(0));
       assert(getWD(1) === expected1, 'Working days row1 expected ' + expected1 + ', got ' + getWD(1));
       assert(getWD(2) === expected2, 'Working days row2 expected ' + expected2 + ', got ' + getWD(2));
@@ -650,21 +682,10 @@
         row.querySelectorAll('td').forEach((td, idx) => {
           if (idx === 15) return; // skip Actions
           if (idx === 1) {
-            // date column: convert to dd-MMM-yyyy, default 0
+            // date column: convert to dd-MMM-yyyy
             const input = td.querySelector('input');
-            if (input && input.value) {
-              const d = new Date(input.value);
-              if (!isNaN(d)) {
-                const day = ('0' + d.getDate()).slice(-2);
-                const monthShort = getMonthShort(d.getMonth());
-                const year = d.getFullYear();
-                rowData.push(day + '-' + monthShort + '-' + year);
-              } else {
-                rowData.push('0');
-              }
-            } else {
-              rowData.push('0');
-            }
+            const d = input ? parseDateStr(input.value) : null;
+            rowData.push(d ? formatDate(d) : '');
           } else {
             const input = td.querySelector('input');
             let val = '';
@@ -684,6 +705,15 @@
         });
         wsData.push(rowData);
       });
+      // Footer totals
+      const footerData = [];
+      document.querySelectorAll('#plannerTable tfoot td').forEach((td, idx) => {
+        if (idx !== 15) {
+          const text = td.textContent.trim();
+          footerData.push(numericCols.has(idx) ? (text === '' ? 0 : Number(text)) : text);
+        }
+      });
+      wsData.push(footerData);
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       XLSX.utils.book_append_sheet(wb, ws, 'Weekly Production Plan');
       XLSX.writeFile(wb, 'weekly_production_plan.xlsx');
