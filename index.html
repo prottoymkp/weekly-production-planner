@@ -148,6 +148,61 @@
       display: block;
       margin: 0 auto;
     }
+
+    /* Auth overlay */
+    #loginOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 999;
+    }
+
+    #loginOverlay.hidden {
+      display: none;
+    }
+
+    #loginBox {
+      background: #fff;
+      padding: 20px;
+      border-radius: 6px;
+      width: 320px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+      box-sizing: border-box;
+    }
+
+    #loginBox h2 {
+      margin-top: 0;
+      margin-bottom: 12px;
+    }
+
+    #loginBox label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+
+    #loginBox input[type="text"],
+    #loginBox input[type="password"] {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+      margin-top: 4px;
+      margin-bottom: 12px;
+    }
+
+    #loginError {
+      color: #b00020;
+      min-height: 18px;
+      margin-top: 6px;
+    }
+
+    #userStatus {
+      margin-bottom: 12px;
+      font-weight: bold;
+    }
   </style>
   <!-- SheetJS library for XLSX export -->
   <!-- The 0.18.7 release is not available on the CDN which caused the
@@ -156,6 +211,21 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
   <body>
+  <div id="loginOverlay" role="dialog" aria-label="Sign in">
+    <div id="loginBox">
+      <h2>Sign in</h2>
+      <form id="loginForm">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" autocomplete="username" required />
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+        <button type="submit">Sign in</button>
+        <div id="loginError" role="alert"></div>
+      </form>
+    </div>
+  </div>
+
+  <div id="userStatus" aria-live="polite"></div>
   <div id="toolbar">
     <label for="monthPicker">Month: </label>
     <input
@@ -233,6 +303,12 @@
 
   <script>
   document.addEventListener('DOMContentLoaded', function() {
+    const users = {
+      admin: { password: 'admin123456', role: 'admin' },
+      planner: { password: 'planner123456', role: 'planner' }
+    };
+    let currentUser = null;
+
     const tableBody = document.querySelector('#plannerTable tbody');
     const addRowBtn = document.getElementById('addRowBtn');
     const add10RowsBtn = document.getElementById('add10RowsBtn');
@@ -240,6 +316,10 @@
     const runTestsBtn = document.getElementById('runTestsBtn');
     const exportBtn = document.getElementById('exportBtn');
     const monthPicker = document.getElementById('monthPicker');
+    const loginOverlay = document.getElementById('loginOverlay');
+    const loginForm = document.getElementById('loginForm');
+    const loginError = document.getElementById('loginError');
+    const userStatus = document.getElementById('userStatus');
     let selectedMonth = '';
     let calendarYear = new Date().getFullYear();
     const chartConfigs = [
@@ -254,6 +334,99 @@
 
     const monthCalendar = buildMonthCalendar();
     document.body.appendChild(monthCalendar.container);
+
+    function updateUserStatus() {
+      if (currentUser) {
+        userStatus.textContent = `Signed in as ${currentUser.name} (${currentUser.role})`;
+      } else {
+        userStatus.textContent = 'Please sign in to start editing.';
+      }
+    }
+
+    function isTodayDateStr(value) {
+      const parsed = parseDateStr(value);
+      if (!parsed) return false;
+      const today = new Date();
+      return (
+        parsed.getFullYear() === today.getFullYear() &&
+        parsed.getMonth() === today.getMonth() &&
+        parsed.getDate() === today.getDate()
+      );
+    }
+
+    function setInputEditable(input, editable) {
+      if (!input) return;
+      input.disabled = !editable;
+      input.readOnly = !editable;
+    }
+
+    function applyRolePermissions() {
+      updateUserStatus();
+      const isAdmin = currentUser && currentUser.role === 'admin';
+      const isPlanner = currentUser && currentUser.role === 'planner';
+
+      addRowBtn.disabled = !currentUser;
+      add10RowsBtn.disabled = !isAdmin;
+      sampleDataBtn.disabled = !isAdmin;
+      runTestsBtn.disabled = !isAdmin;
+      exportBtn.disabled = !isAdmin;
+
+      Array.from(tableBody.children).forEach(row => {
+        const dateInput = row.cells[1].querySelector('input');
+        const articleInput = row.cells[2].querySelector('input');
+        const cutPlanInput = row.cells[4].querySelector('input');
+        const cutActInput = row.cells[5].querySelector('input');
+        const stitchPlanInput = row.cells[7].querySelector('input');
+        const stitchActInput = row.cells[8].querySelector('input');
+        const lastPlanInput = row.cells[10].querySelector('input');
+        const lastActInput = row.cells[11].querySelector('input');
+        const remarksInput = row.cells[14].querySelector('input');
+        const delBtn = row.cells[15].querySelector('button');
+
+        if (isAdmin) {
+          setInputEditable(dateInput, true);
+          setInputEditable(articleInput, true);
+          setInputEditable(cutPlanInput, true);
+          setInputEditable(cutActInput, true);
+          setInputEditable(stitchPlanInput, true);
+          setInputEditable(stitchActInput, true);
+          setInputEditable(lastPlanInput, true);
+          setInputEditable(lastActInput, true);
+          setInputEditable(remarksInput, true);
+          if (delBtn) delBtn.disabled = false;
+          return;
+        }
+
+        const allowTodayActuals = isPlanner && isTodayDateStr(dateInput ? dateInput.value : '');
+        setInputEditable(dateInput, false);
+        setInputEditable(articleInput, !!allowTodayActuals);
+        setInputEditable(cutPlanInput, false);
+        setInputEditable(cutActInput, !!allowTodayActuals);
+        setInputEditable(stitchPlanInput, false);
+        setInputEditable(stitchActInput, !!allowTodayActuals);
+        setInputEditable(lastPlanInput, false);
+        setInputEditable(lastActInput, !!allowTodayActuals);
+        setInputEditable(remarksInput, !!allowTodayActuals);
+        if (delBtn) delBtn.disabled = !allowTodayActuals;
+      });
+    }
+
+    function requireLogin() {
+      if (!currentUser) {
+        alert('Please sign in first.');
+        return false;
+      }
+      return true;
+    }
+
+    function requireAdmin() {
+      if (!requireLogin()) return false;
+      if (currentUser.role !== 'admin') {
+        alert('This action is available to admin only.');
+        return false;
+      }
+      return true;
+    }
 
     function buildMonthCalendar() {
       const container = document.createElement('div');
@@ -355,7 +528,7 @@
      * Add a new empty row to the table. All inputs are set up
      * with appropriate event handlers to trigger recalculation.
      */
-    function addRow() {
+    function addRow(options = {}) {
       const tr = document.createElement('tr');
       // Week cell (read-only)
       const weekCell = document.createElement('td');
@@ -368,6 +541,9 @@
       dateInput.type = 'date';
       dateInput.placeholder = 'yyyy-MM-dd';
       dateInput.className = 'date-input';
+      if (options.presetDate) {
+        dateInput.value = options.presetDate;
+      }
       dateInput.addEventListener('input', recalcAll);
       dateInput.addEventListener('blur', normalizeDateInput);
       dateInput.addEventListener('change', normalizeDateInput);
@@ -499,6 +675,7 @@
       tr.appendChild(actionCell);
 
       tableBody.appendChild(tr);
+      applyRolePermissions();
     }
 
     /**
@@ -587,6 +764,10 @@
       return `${year}-${month}-${day}`;
     }
 
+    function todayFormatted() {
+      return formatDate(new Date());
+    }
+
     /**
      * Normalize user-entered dates to yyyy-MM-dd where possible.
      */
@@ -595,6 +776,7 @@
       if (parsed) {
         event.target.value = formatDate(parsed);
       }
+      applyRolePermissions();
       recalcAll();
     }
 
@@ -1180,24 +1362,48 @@
       XLSX.writeFile(wb, 'weekly_production_plan.xlsx');
     }
 
+    loginForm.addEventListener('submit', function(event) {
+      event.preventDefault();
+      const username = loginForm.username.value.trim();
+      const password = loginForm.password.value;
+      const record = users[username];
+      if (!record || record.password !== password) {
+        loginError.textContent = 'Invalid username or password.';
+        return;
+      }
+      currentUser = { name: username, role: record.role };
+      loginOverlay.classList.add('hidden');
+      loginError.textContent = '';
+      applyRolePermissions();
+    });
+
     // Attach event listeners to toolbar buttons
     addRowBtn.addEventListener('click', function() {
-      addRow();
+      if (!requireLogin()) return;
+      if (currentUser.role === 'planner') {
+        addRow({ presetDate: todayFormatted() });
+      } else {
+        addRow();
+      }
       recalcAll();
     });
     add10RowsBtn.addEventListener('click', function() {
+      if (!requireAdmin()) return;
       for (let i = 0; i < 10; i++) {
         addRow();
       }
       recalcAll();
     });
     sampleDataBtn.addEventListener('click', function() {
+      if (!requireAdmin()) return;
       addSampleData();
     });
     runTestsBtn.addEventListener('click', function() {
+      if (!requireAdmin()) return;
       runTests();
     });
     exportBtn.addEventListener('click', function() {
+      if (!requireAdmin()) return;
       exportTable();
     });
     monthPicker.addEventListener('focus', openMonthCalendar);
@@ -1225,6 +1431,8 @@
         closeMonthCalendar();
       }
     });
+
+    applyRolePermissions();
   });
   </script>
 </body>
