@@ -422,31 +422,41 @@
     }
 
     /**
-     * Build 20 rows of sample data using dates from the current month.
+     * Build 30 rows of sample data spanning the previous, current, and next month.
      */
     function buildSampleRows() {
       const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const totalDays = daysInMonth(year, month);
       const articles = ['A1', 'B2', 'C3', 'D4'];
+      const monthOffsets = [-1, 0, 1];
+      const rows = [];
+      let idx = 0;
 
-      return Array.from({ length: 20 }, (_, idx) => {
-        const day = (idx % totalDays) + 1;
-        const date = new Date(year, month, day);
-        const base = 80 + idx * 5;
-        return {
-          date: formatInputDate(date),
-          article: articles[idx % articles.length],
-          cutPlan: base + 20,
-          cutAct: base + 10,
-          stitchPlan: base + 15,
-          stitchAct: base + 5,
-          lastPlan: base + 10,
-          lastAct: base,
-          remarks: `Sample row ${idx + 1}`
-        };
+      monthOffsets.forEach(offset => {
+        const monthDate = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+        const year = monthDate.getFullYear();
+        const month = monthDate.getMonth();
+        const totalDays = daysInMonth(year, month);
+
+        for (let i = 0; i < 10; i++) {
+          const day = (i % totalDays) + 1;
+          const date = new Date(year, month, day);
+          const base = 80 + idx * 5;
+          rows.push({
+            date: formatInputDate(date),
+            article: articles[idx % articles.length],
+            cutPlan: base + 20,
+            cutAct: base + 10,
+            stitchPlan: base + 15,
+            stitchAct: base + 5,
+            lastPlan: base + 10,
+            lastAct: base,
+            remarks: `Sample row ${idx + 1}`
+          });
+          idx++;
+        }
       });
+
+      return rows;
     }
 
     /**
