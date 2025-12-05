@@ -43,6 +43,26 @@
     .date-input {
       width: 150px;
     }
+
+    /* Plan chart styling */
+    #chartContainer {
+      position: fixed;
+      bottom: 12px;
+      left: 12px;
+      width: 340px;
+      height: 220px;
+      background: #fff;
+      border: 1px solid #ddd;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+      padding: 8px;
+      box-sizing: border-box;
+      z-index: 2;
+    }
+
+    #planChart {
+      width: 100%;
+      height: 100%;
+    }
   </style>
   <!-- SheetJS library for XLSX export -->
   <!-- The 0.18.7 release is not available on the CDN which caused the
@@ -102,6 +122,10 @@
     </tfoot>
   </table>
 
+  <div id="chartContainer" aria-label="Production plan chart">
+    <canvas id="planChart" width="320" height="200"></canvas>
+  </div>
+
   <script>
   document.addEventListener('DOMContentLoaded', function() {
     const tableBody = document.querySelector('#plannerTable tbody');
@@ -110,6 +134,8 @@
     const sampleDataBtn = document.getElementById('sampleDataBtn');
     const runTestsBtn = document.getElementById('runTestsBtn');
     const exportBtn = document.getElementById('exportBtn');
+    const planChart = document.getElementById('planChart');
+    const planCtx = planChart.getContext('2d');
 
     /**
      * Add a new empty row to the table. All inputs are set up
@@ -334,6 +360,7 @@
       recalcPercentages();
       recalcWorkingDays();
       updateFooterTotals();
+      updatePlanChart();
     }
 
     /**
@@ -505,6 +532,105 @@
      */
     function daysInMonth(year, month) {
       return new Date(year, month + 1, 0).getDate();
+    }
+
+    /**
+     * Return the start date of the week bucket for a given date.
+     */
+    function getWeekStartDate(date) {
+      const day = date.getDate();
+      let startDay;
+      if (day <= 7) startDay = 1;
+      else if (day <= 14) startDay = 8;
+      else if (day <= 21) startDay = 15;
+      else if (day <= 28) startDay = 22;
+      else startDay = 29;
+      return new Date(date.getFullYear(), date.getMonth(), startDay);
+    }
+
+    /**
+     * Build a sorted series of total Cutting Plan values grouped by week.
+     */
+    function buildPlanSeries() {
+      const buckets = new Map();
+      Array.from(tableBody.children).forEach(row => {
+        const dateInput = row.cells[1].querySelector('input');
+        const dateStr = dateInput ? dateInput.value : '';
+        const date = parseDateStr(dateStr);
+        if (!date) return;
+        const weekLabel = row.cells[0].textContent || getWeekLabel(dateStr);
+        const cutPlan = parseInt(row.cells[4].querySelector('input').value) || 0;
+        const startDate = getWeekStartDate(date);
+        const key = `${weekLabel}-${startDate.toISOString()}`;
+        if (!buckets.has(key)) {
+          buckets.set(key, { label: weekLabel, total: 0, order: startDate.getTime() });
+        }
+        buckets.get(key).total += cutPlan;
+      });
+      return Array.from(buckets.values()).sort((a, b) => a.order - b.order);
+    }
+
+    /**
+     * Render a simple line chart showing weekly Cutting Plan totals.
+     */
+    function updatePlanChart() {
+      if (!planCtx) return;
+      const series = buildPlanSeries();
+      const width = planChart.width;
+      const height = planChart.height;
+      planCtx.clearRect(0, 0, width, height);
+
+      if (series.length === 0) {
+        planCtx.fillStyle = '#666';
+        planCtx.font = '12px Arial';
+        planCtx.fillText('Add data to see production plan chart', 10, 24);
+        return;
+      }
+
+      const padding = 32;
+      const maxVal = Math.max(...series.map(p => p.total), 0);
+      const usableHeight = height - padding * 2;
+      const usableWidth = width - padding * 2;
+      const yScale = maxVal > 0 ? usableHeight / maxVal : 0;
+      const xStep = series.length > 1 ? usableWidth / (series.length - 1) : 0;
+
+      // Axes
+      planCtx.strokeStyle = '#ccc';
+      planCtx.lineWidth = 1;
+      planCtx.beginPath();
+      planCtx.moveTo(padding, padding);
+      planCtx.lineTo(padding, height - padding);
+      planCtx.lineTo(width - padding, height - padding);
+      planCtx.stroke();
+
+      // Plot line
+      planCtx.strokeStyle = '#007bff';
+      planCtx.lineWidth = 2;
+      planCtx.beginPath();
+      series.forEach((point, idx) => {
+        const x = padding + idx * xStep;
+        const y = height - padding - (yScale > 0 ? point.total * yScale : 0);
+        if (idx === 0) planCtx.moveTo(x, y);
+        else planCtx.lineTo(x, y);
+      });
+      planCtx.stroke();
+
+      // Plot points and labels
+      planCtx.fillStyle = '#007bff';
+      planCtx.font = '11px Arial';
+      series.forEach((point, idx) => {
+        const x = padding + idx * xStep;
+        const y = height - padding - (yScale > 0 ? point.total * yScale : 0);
+        planCtx.beginPath();
+        planCtx.arc(x, y, 3, 0, Math.PI * 2);
+        planCtx.fill();
+        planCtx.fillText(point.label, x - 12, height - padding + 14);
+      });
+
+      // Max value label
+      planCtx.fillStyle = '#333';
+      planCtx.fillText('Plan (Cutting)', padding, padding - 10);
+      planCtx.fillText(`${maxVal}`, 6, padding + 4);
     }
 
     /**
