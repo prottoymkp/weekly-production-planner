@@ -369,9 +369,12 @@
       // Date cell
       const dateCell = document.createElement('td');
       const dateInput = document.createElement('input');
-      dateInput.type = 'date';
+      dateInput.type = 'text';
+      dateInput.placeholder = 'dd-MMM-yyyy';
       dateInput.className = 'date-input';
       dateInput.addEventListener('input', recalcAll);
+      dateInput.addEventListener('blur', normalizeDateInput);
+      dateInput.addEventListener('change', normalizeDateInput);
       dateCell.appendChild(dateInput);
       tr.appendChild(dateCell);
 
@@ -589,13 +592,14 @@
     }
 
     /**
-     * Format a Date object as yyyy-MM-dd for use with date inputs.
+     * Normalize user-entered dates to dd-MMM-yyyy where possible.
      */
-    function formatInputDate(date) {
-      const day = ('0' + date.getDate()).slice(-2);
-      const month = ('0' + (date.getMonth() + 1)).slice(-2);
-      const year = date.getFullYear();
-      return `${year}-${month}-${day}`;
+    function normalizeDateInput(event) {
+      const parsed = parseDateStr(event.target.value);
+      if (parsed) {
+        event.target.value = formatDate(parsed);
+      }
+      recalcAll();
     }
 
     /**
@@ -619,7 +623,7 @@
           const date = new Date(year, month, day);
           const base = 80 + idx * 5;
           rows.push({
-            date: formatInputDate(date),
+            date: formatDate(date),
             article: articles[idx % articles.length],
             cutPlan: base + 20,
             cutAct: base + 10,
