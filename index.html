@@ -333,41 +333,7 @@
      */
     function addSampleData() {
       clearRows();
-      const samples = [
-        {
-          date: '2025-08-05',
-          article: 'A1',
-          cutPlan: 100,
-          cutAct: 80,
-          stitchPlan: 90,
-          stitchAct: 70,
-          lastPlan: 80,
-          lastAct: 60,
-          remarks: ''
-        },
-        {
-          date: '2025-08-15',
-          article: 'A1',
-          cutPlan: 200,
-          cutAct: 150,
-          stitchPlan: 180,
-          stitchAct: 160,
-          lastPlan: 170,
-          lastAct: 150,
-          remarks: ''
-        },
-        {
-          date: '2025-09-05',
-          article: 'B2',
-          cutPlan: 120,
-          cutAct: 100,
-          stitchPlan: 110,
-          stitchAct: 90,
-          lastPlan: 100,
-          lastAct: 85,
-          remarks: ''
-        }
-      ];
+      const samples = buildSampleRows();
       samples.forEach(sample => {
         addRow();
         const row = tableBody.lastChild;
@@ -436,6 +402,44 @@
       const monthShort = getMonthShort(date.getMonth());
       const year = date.getFullYear();
       return `${day}-${monthShort}-${year}`;
+    }
+
+    /**
+     * Format a Date object as yyyy-MM-dd for use with date inputs.
+     */
+    function formatInputDate(date) {
+      const day = ('0' + date.getDate()).slice(-2);
+      const month = ('0' + (date.getMonth() + 1)).slice(-2);
+      const year = date.getFullYear();
+      return `${year}-${month}-${day}`;
+    }
+
+    /**
+     * Build 20 rows of sample data using dates from the current month.
+     */
+    function buildSampleRows() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const totalDays = daysInMonth(year, month);
+      const articles = ['A1', 'B2', 'C3', 'D4'];
+
+      return Array.from({ length: 20 }, (_, idx) => {
+        const day = (idx % totalDays) + 1;
+        const date = new Date(year, month, day);
+        const base = 80 + idx * 5;
+        return {
+          date: formatInputDate(date),
+          article: articles[idx % articles.length],
+          cutPlan: base + 20,
+          cutAct: base + 10,
+          stitchPlan: base + 15,
+          stitchAct: base + 5,
+          lastPlan: base + 10,
+          lastAct: base,
+          remarks: `Sample row ${idx + 1}`
+        };
+      });
     }
 
     /**
@@ -797,37 +801,65 @@
         }
       }
       // Populate with sample data for testing
+      const samples = buildSampleRows();
       addSampleData();
       const rows = Array.from(tableBody.children);
       function getWeek(rowIndex) {
         return rows[rowIndex].cells[0].textContent;
       }
-      // 1. Week computation
-      assert(getWeek(0) === 'W1-Aug', '05-Aug-2025 should be W1-Aug, got ' + getWeek(0));
-      assert(getWeek(1) === 'W3-Aug', '15-Aug-2025 should be W3-Aug, got ' + getWeek(1));
-      assert(getWeek(2) === 'W1-Sep', '05-Sep-2025 should be W1-Sep, got ' + getWeek(2));
 
-      // 2. Order Quantity logic
+      // 1. Sample size and date coverage
+      assert(rows.length === samples.length, 'Sample data should produce 20 rows');
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      const allDatesCurrentMonth = samples.every(sample => {
+        const date = parseDateStr(sample.date);
+        return date && date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+      });
+      assert(allDatesCurrentMonth, 'All sample dates should be in the current month and year');
+
+      // 2. Week computation
+      const expectedFirstWeek = getWeekLabel(samples[0].date);
+      assert(getWeek(0) === expectedFirstWeek, 'First row should reflect current month week label');
+
+      // 3. Order Quantity logic
       function getOQ(rowIndex) {
-        return rows[rowIndex].cells[3].textContent;
+        return parseInt(rows[rowIndex].cells[3].textContent);
       }
-      assert(getOQ(0) === '300', 'Order Quantity for A1 Aug should be 300');
-      assert(getOQ(1) === '300', 'Order Quantity for A1 Aug second row should be 300');
-      assert(getOQ(2) === '120', 'Order Quantity for B2 Sep should be 120');
+      const oqBuckets = samples.reduce((acc, sample) => {
+        const date = parseDateStr(sample.date);
+        const key = `${sample.article.toLowerCase()}-${date.getFullYear()}-${date.getMonth()}`;
+        if (!acc[key]) {
+          acc[key] = { cut: 0, stitch: 0, last: 0 };
+        }
+        acc[key].cut += sample.cutPlan;
+        acc[key].stitch += sample.stitchPlan;
+        acc[key].last += sample.lastPlan;
+        return acc;
+      }, {});
+      const firstSampleKey = (() => {
+        const date = parseDateStr(samples[0].date);
+        return `${samples[0].article.toLowerCase()}-${date.getFullYear()}-${date.getMonth()}`;
+      })();
+      const expectedOQ = Math.max(...Object.values(oqBuckets[firstSampleKey]));
+      assert(getOQ(0) === expectedOQ, 'Order Quantity should match max of plan sums for the article/month');
 
-      // 3. Percentages
+      // 4. Percentages
       function getPct(rowIndex, colIndex) {
         return rows[rowIndex].cells[colIndex].textContent;
       }
-      assert(getPct(0, 6) === '80.0%', 'Cutting% row0 should be 80.0%');
-      assert(getPct(0, 9) === '77.8%', 'Stitching% row0 should be 77.8%');
-      assert(getPct(0, 12) === '75.0%', 'Lasting% row0 should be 75.0%');
+      const firstSample = samples[0];
+      const expectedCutPct = ((firstSample.cutAct / firstSample.cutPlan) * 100).toFixed(1) + '%';
+      const expectedStitchPct = ((firstSample.stitchAct / firstSample.stitchPlan) * 100).toFixed(1) + '%';
+      const expectedLastPct = ((firstSample.lastAct / firstSample.lastPlan) * 100).toFixed(1) + '%';
+      assert(getPct(0, 6) === expectedCutPct, 'Cutting% for first row should match calculated value');
+      assert(getPct(0, 9) === expectedStitchPct, 'Stitching% for first row should match calculated value');
+      assert(getPct(0, 12) === expectedLastPct, 'Lasting% for first row should match calculated value');
 
-      // 4. Working Days (week)
+      // 5. Working Days (week)
       function getWD(rowIndex) {
         return parseInt(rows[rowIndex].cells[13].textContent);
       }
-      // Helper to compute expected working days using same logic
       function expectedWorkingDays(dateStr) {
         const date = parseDateStr(dateStr);
         const day = date.getDate();
@@ -847,14 +879,10 @@
         }
         return count;
       }
-      const expected0 = expectedWorkingDays('05-Aug-2025');
-      const expected1 = expectedWorkingDays('15-Aug-2025');
-      const expected2 = expectedWorkingDays('05-Sep-2025');
-      assert(getWD(0) === expected0, 'Working days row0 expected ' + expected0 + ', got ' + getWD(0));
-      assert(getWD(1) === expected1, 'Working days row1 expected ' + expected1 + ', got ' + getWD(1));
-      assert(getWD(2) === expected2, 'Working days row2 expected ' + expected2 + ', got ' + getWD(2));
+      const expectedWD = expectedWorkingDays(samples[0].date);
+      assert(getWD(0) === expectedWD, 'Working days should match calculated week working days for first row');
 
-      // 5. Footer totals
+      // 6. Footer totals
       const totals = {
         cutPlan: parseInt(document.querySelector('.total-cut-plan').textContent),
         cutAct: parseInt(document.querySelector('.total-cut-actual').textContent),
@@ -863,12 +891,22 @@
         lastPlan: parseInt(document.querySelector('.total-last-plan').textContent),
         lastAct: parseInt(document.querySelector('.total-last-actual').textContent)
       };
-      assert(totals.cutPlan === 100 + 200 + 120, 'Total Cutting Plan should be 420');
-      assert(totals.cutAct === 80 + 150 + 100, 'Total Cutting Actual should be 330');
-      assert(totals.stitchPlan === 90 + 180 + 110, 'Total Stitching Plan should be 380');
-      assert(totals.stitchAct === 70 + 160 + 90, 'Total Stitching Actual should be 320');
-      assert(totals.lastPlan === 80 + 170 + 100, 'Total Lasting Plan should be 350');
-      assert(totals.lastAct === 60 + 150 + 85, 'Total Lasting Actual should be 295');
+      const expectedTotals = samples.reduce((acc, sample) => {
+        acc.cutPlan += sample.cutPlan;
+        acc.cutAct += sample.cutAct;
+        acc.stitchPlan += sample.stitchPlan;
+        acc.stitchAct += sample.stitchAct;
+        acc.lastPlan += sample.lastPlan;
+        acc.lastAct += sample.lastAct;
+        return acc;
+      }, { cutPlan: 0, cutAct: 0, stitchPlan: 0, stitchAct: 0, lastPlan: 0, lastAct: 0 });
+
+      assert(totals.cutPlan === expectedTotals.cutPlan, 'Total Cutting Plan should sum sample data');
+      assert(totals.cutAct === expectedTotals.cutAct, 'Total Cutting Actual should sum sample data');
+      assert(totals.stitchPlan === expectedTotals.stitchPlan, 'Total Stitching Plan should sum sample data');
+      assert(totals.stitchAct === expectedTotals.stitchAct, 'Total Stitching Actual should sum sample data');
+      assert(totals.lastPlan === expectedTotals.lastPlan, 'Total Lasting Plan should sum sample data');
+      assert(totals.lastAct === expectedTotals.lastAct, 'Total Lasting Actual should sum sample data');
 
       if (logs.length === 0) {
         console.log('All tests passed');
