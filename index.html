@@ -111,6 +111,24 @@
       width: 150px;
     }
 
+    .date-picker-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+
+    .date-display {
+      width: 150px;
+      background-color: #fff;
+      cursor: pointer;
+    }
+
+    .native-date-input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
     /* Plan chart styling */
     #chartContainer {
       width: min(1100px, calc(100% - 24px));
@@ -372,7 +390,7 @@
       exportBtn.disabled = !isAdmin;
 
       Array.from(tableBody.children).forEach(row => {
-        const dateInput = row.cells[1].querySelector('input');
+        const { displayInput, pickerInput } = getDateInputs(row);
         const articleInput = row.cells[2].querySelector('input');
         const cutPlanInput = row.cells[4].querySelector('input');
         const cutActInput = row.cells[5].querySelector('input');
@@ -384,7 +402,7 @@
         const delBtn = row.cells[15].querySelector('button');
 
         if (isAdmin) {
-          setInputEditable(dateInput, true);
+          setDateEditable(displayInput, pickerInput, true);
           setInputEditable(articleInput, true);
           setInputEditable(cutPlanInput, true);
           setInputEditable(cutActInput, true);
@@ -397,8 +415,8 @@
           return;
         }
 
-        const allowTodayActuals = isPlanner && isTodayDateStr(dateInput ? dateInput.value : '');
-        setInputEditable(dateInput, false);
+        const allowTodayActuals = isPlanner && isTodayDateStr(getRowDateValue(row));
+        setDateEditable(displayInput, pickerInput, false);
         setInputEditable(articleInput, !!allowTodayActuals);
         setInputEditable(cutPlanInput, false);
         setInputEditable(cutActInput, !!allowTodayActuals);
@@ -537,17 +555,36 @@
 
       // Date cell
       const dateCell = document.createElement('td');
+      const dateWrapper = document.createElement('div');
+      dateWrapper.className = 'date-picker-wrapper';
+
+      const dateDisplay = document.createElement('input');
+      dateDisplay.type = 'text';
+      dateDisplay.placeholder = 'dd-MMM-yyyy';
+      dateDisplay.className = 'date-input date-display';
+      dateDisplay.readOnly = true;
+
       const dateInput = document.createElement('input');
       dateInput.type = 'date';
-      dateInput.placeholder = 'yyyy-MM-dd';
-      dateInput.className = 'date-input';
-      if (options.presetDate) {
-        dateInput.value = options.presetDate;
-      }
-      dateInput.addEventListener('input', recalcAll);
-      dateInput.addEventListener('blur', normalizeDateInput);
-      dateInput.addEventListener('change', normalizeDateInput);
-      dateCell.appendChild(dateInput);
+      dateInput.className = 'native-date-input';
+      dateInput.setAttribute('aria-label', 'Choose date');
+
+      dateInput.addEventListener('change', () => handleDateChange(dateInput, dateDisplay));
+      dateInput.addEventListener('blur', () => handleDateChange(dateInput, dateDisplay));
+      dateDisplay.addEventListener('click', () => {
+        if (typeof dateInput.showPicker === 'function') {
+          dateInput.showPicker();
+        } else {
+          dateInput.focus();
+          dateInput.click();
+        }
+      });
+
+      setDateValue(dateInput, dateDisplay, options.presetDate || '');
+
+      dateWrapper.appendChild(dateDisplay);
+      dateWrapper.appendChild(dateInput);
+      dateCell.appendChild(dateWrapper);
       tr.appendChild(dateCell);
 
       // Article cell
@@ -698,7 +735,7 @@
         addRow();
         const row = tableBody.lastChild;
         const cells = row.querySelectorAll('td');
-        cells[1].querySelector('input').value = sample.date;
+        setRowDateValue(row, sample.date);
         cells[2].querySelector('input').value = sample.article;
         cells[4].querySelector('input').value = sample.cutPlan;
         cells[5].querySelector('input').value = sample.cutAct;
@@ -764,20 +801,75 @@
       return `${year}-${month}-${day}`;
     }
 
+    function formatDisplayDate(date) {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const day = ('0' + date.getDate()).slice(-2);
+      return `${day}-${months[date.getMonth()]}-${date.getFullYear()}`;
+    }
+
     function todayFormatted() {
       return formatDate(new Date());
     }
 
-    /**
-     * Normalize user-entered dates to yyyy-MM-dd where possible.
-     */
-    function normalizeDateInput(event) {
-      const parsed = parseDateStr(event.target.value);
-      if (parsed) {
-        event.target.value = formatDate(parsed);
+    function syncDateDisplay(pickerInput, displayInput) {
+      if (!pickerInput || !displayInput) return;
+      if (pickerInput.value) {
+        const parsed = parseDateStr(pickerInput.value);
+        if (parsed) {
+          displayInput.value = formatDisplayDate(parsed);
+          displayInput.dataset.iso = pickerInput.value;
+          return;
+        }
       }
+      displayInput.value = '';
+      displayInput.dataset.iso = '';
+    }
+
+    function setDateValue(pickerInput, displayInput, value) {
+      const parsed = parseDateStr(value);
+      if (parsed) {
+        pickerInput.value = formatDate(parsed);
+      } else {
+        pickerInput.value = '';
+      }
+      syncDateDisplay(pickerInput, displayInput);
+    }
+
+    function handleDateChange(pickerInput, displayInput) {
+      syncDateDisplay(pickerInput, displayInput);
       applyRolePermissions();
       recalcAll();
+    }
+
+    function getDateInputs(row) {
+      const dateCell = row.cells[1];
+      return {
+        displayInput: dateCell.querySelector('.date-display'),
+        pickerInput: dateCell.querySelector('.native-date-input')
+      };
+    }
+
+    function getRowDateValue(row) {
+      const { displayInput, pickerInput } = getDateInputs(row);
+      return (displayInput && displayInput.dataset.iso) || (pickerInput && pickerInput.value) || (displayInput && displayInput.value) || '';
+    }
+
+    function setDateEditable(displayInput, pickerInput, editable) {
+      if (displayInput) {
+        displayInput.disabled = !editable;
+        displayInput.readOnly = true;
+      }
+      if (pickerInput) {
+        pickerInput.disabled = !editable;
+        pickerInput.tabIndex = editable ? 0 : -1;
+      }
+    }
+
+    function setRowDateValue(row, value) {
+      const { displayInput, pickerInput } = getDateInputs(row);
+      if (pickerInput && displayInput) {
+        setDateValue(pickerInput, displayInput, value);
+      }
     }
 
     /**
@@ -853,9 +945,9 @@
      */
     function recalcWeeks() {
       Array.from(tableBody.children).forEach(row => {
-        const dateInput = row.cells[1].querySelector('input');
         const weekCell = row.cells[0];
-        const weekLabel = dateInput && dateInput.value ? getWeekLabel(dateInput.value) : '';
+        const dateStr = getRowDateValue(row);
+        const weekLabel = dateStr ? getWeekLabel(dateStr) : '';
         weekCell.textContent = weekLabel;
       });
     }
@@ -870,7 +962,7 @@
       // First pass: aggregate sums
       Array.from(tableBody.children).forEach(row => {
         const article = row.cells[2].querySelector('input').value.trim().toLowerCase();
-        const dateStr = row.cells[1].querySelector('input').value;
+        const dateStr = getRowDateValue(row);
         if (!article || !dateStr) return;
         const date = parseDateStr(dateStr);
         if (!date) return;
@@ -889,7 +981,7 @@
       Array.from(tableBody.children).forEach(row => {
         const oqCell = row.cells[3];
         const article = row.cells[2].querySelector('input').value.trim().toLowerCase();
-        const dateStr = row.cells[1].querySelector('input').value;
+        const dateStr = getRowDateValue(row);
         if (!article || !dateStr) {
           oqCell.textContent = '0';
           return;
@@ -979,8 +1071,7 @@
     function buildPlanActualSeries(planIndex, actualIndex) {
       const buckets = new Map();
       Array.from(tableBody.children).forEach(row => {
-        const dateInput = row.cells[1].querySelector('input');
-        const dateStr = dateInput ? dateInput.value : '';
+        const dateStr = getRowDateValue(row);
         const date = parseDateStr(dateStr);
         if (!date) return;
         if (selectedMonth) {
@@ -1127,7 +1218,7 @@
     function recalcWorkingDays() {
       Array.from(tableBody.children).forEach(row => {
         const wdCell = row.cells[13];
-        const dateStr = row.cells[1].querySelector('input').value;
+        const dateStr = getRowDateValue(row);
         if (!dateStr) {
           wdCell.textContent = '0';
           return;
