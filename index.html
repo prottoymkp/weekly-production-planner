@@ -599,6 +599,16 @@
     }
 
     /**
+     * Check if a given date occurs after today (ignoring time).
+     */
+    function isFutureDate(date) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const compare = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      return compare > today;
+    }
+
+    /**
      * Build 30 rows of sample data spanning the previous, current, and next month.
      */
     function buildSampleRows() {
@@ -618,15 +628,16 @@
           const day = (i % totalDays) + 1;
           const date = new Date(year, month, day);
           const base = 80 + idx * 5;
+          const future = isFutureDate(date);
           rows.push({
             date: formatInputDate(date),
             article: articles[idx % articles.length],
             cutPlan: base + 20,
-            cutAct: base + 10,
+            cutAct: future ? 0 : base + 10,
             stitchPlan: base + 15,
-            stitchAct: base + 5,
+            stitchAct: future ? 0 : base + 5,
             lastPlan: base + 10,
-            lastAct: base,
+            lastAct: future ? 0 : base,
             remarks: `Sample row ${idx + 1}`
           });
           idx++;
@@ -1004,6 +1015,11 @@
           logs.push('FAIL: ' + message);
         }
       }
+      function isFutureDateStr(dateStr) {
+        const date = parseDateStr(dateStr);
+        if (!date) return false;
+        return isFutureDate(date);
+      }
       // Populate with sample data for testing
       const samples = buildSampleRows();
       addSampleData();
@@ -1013,14 +1029,24 @@
       }
 
       // 1. Sample size and date coverage
-      assert(rows.length === samples.length, 'Sample data should produce 20 rows');
+      assert(rows.length === samples.length, `Sample data should produce ${samples.length} rows`);
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
-      const allDatesCurrentMonth = samples.every(sample => {
+      const prevMonthKey = (() => {
+        const dt = new Date(currentYear, currentMonth - 1, 1);
+        return `${dt.getFullYear()}-${dt.getMonth()}`;
+      })();
+      const nextMonthKey = (() => {
+        const dt = new Date(currentYear, currentMonth + 1, 1);
+        return `${dt.getFullYear()}-${dt.getMonth()}`;
+      })();
+      const monthsCovered = new Set(samples.map(sample => {
         const date = parseDateStr(sample.date);
-        return date && date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-      });
-      assert(allDatesCurrentMonth, 'All sample dates should be in the current month and year');
+        return date ? `${date.getFullYear()}-${date.getMonth()}` : '';
+      }).filter(Boolean));
+      assert(monthsCovered.has(`${currentYear}-${currentMonth}`), 'Samples should include current month');
+      assert(monthsCovered.has(prevMonthKey), 'Samples should include previous month');
+      assert(monthsCovered.has(nextMonthKey), 'Samples should include next month');
 
       // 2. Week computation
       const expectedFirstWeek = getWeekLabel(samples[0].date);
@@ -1060,7 +1086,19 @@
       assert(getPct(0, 9) === expectedStitchPct, 'Stitching% for first row should match calculated value');
       assert(getPct(0, 12) === expectedLastPct, 'Lasting% for first row should match calculated value');
 
-      // 5. Working Days (week)
+      // 5. Future-dated rows should have zero actuals
+      samples.forEach((sample, idx) => {
+        if (!isFutureDateStr(sample.date)) return;
+        const row = rows[idx];
+        const cutAct = parseInt(row.cells[5].querySelector('input').value) || 0;
+        const stitchAct = parseInt(row.cells[8].querySelector('input').value) || 0;
+        const lastAct = parseInt(row.cells[11].querySelector('input').value) || 0;
+        assert(cutAct === 0, 'Future dates should set Cutting Actual to zero');
+        assert(stitchAct === 0, 'Future dates should set Stitching Actual to zero');
+        assert(lastAct === 0, 'Future dates should set Lasting Actual to zero');
+      });
+
+      // 6. Working Days (week)
       function getWD(rowIndex) {
         return parseInt(rows[rowIndex].cells[13].textContent);
       }
@@ -1086,7 +1124,7 @@
       const expectedWD = expectedWorkingDays(samples[0].date);
       assert(getWD(0) === expectedWD, 'Working days should match calculated week working days for first row');
 
-      // 6. Footer totals
+      // 7. Footer totals
       const totals = {
         cutPlan: parseInt(document.querySelector('.total-cut-plan').textContent),
         cutAct: parseInt(document.querySelector('.total-cut-actual').textContent),
