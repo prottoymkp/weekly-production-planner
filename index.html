@@ -49,8 +49,9 @@
       position: fixed;
       bottom: 12px;
       left: 12px;
-      width: 340px;
-      height: 220px;
+      width: 380px;
+      max-height: 80vh;
+      overflow-y: auto;
       background: #fff;
       border: 1px solid #ddd;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
@@ -59,9 +60,24 @@
       z-index: 2;
     }
 
-    #planChart {
+    .chart-panel {
+      margin-bottom: 12px;
+      padding: 6px;
+      border: 1px solid #eee;
+      border-radius: 4px;
+      background: #fafafa;
+    }
+
+    .chart-panel h3 {
+      margin: 4px 0 8px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .chart-panel canvas {
       width: 100%;
-      height: 100%;
+      height: 200px;
+      display: block;
     }
   </style>
   <!-- SheetJS library for XLSX export -->
@@ -122,8 +138,19 @@
     </tfoot>
   </table>
 
-  <div id="chartContainer" aria-label="Production plan chart">
-    <canvas id="planChart" width="320" height="200"></canvas>
+  <div id="chartContainer" aria-label="Production plan charts">
+    <div class="chart-panel" aria-label="Cutting performance chart">
+      <h3>Cutting</h3>
+      <canvas id="cutChart" width="340" height="200"></canvas>
+    </div>
+    <div class="chart-panel" aria-label="Stitching performance chart">
+      <h3>Stitching</h3>
+      <canvas id="stitchChart" width="340" height="200"></canvas>
+    </div>
+    <div class="chart-panel" aria-label="Lasting performance chart">
+      <h3>Lasting</h3>
+      <canvas id="lastChart" width="340" height="200"></canvas>
+    </div>
   </div>
 
   <script>
@@ -134,8 +161,15 @@
     const sampleDataBtn = document.getElementById('sampleDataBtn');
     const runTestsBtn = document.getElementById('runTestsBtn');
     const exportBtn = document.getElementById('exportBtn');
-    const planChart = document.getElementById('planChart');
-    const planCtx = planChart.getContext('2d');
+    const chartConfigs = [
+      { id: 'cutChart', planIndex: 4, actualIndex: 5, title: 'Plan vs Actual (Cutting)' },
+      { id: 'stitchChart', planIndex: 7, actualIndex: 8, title: 'Plan vs Actual (Stitching)' },
+      { id: 'lastChart', planIndex: 10, actualIndex: 11, title: 'Plan vs Actual (Lasting)' }
+    ];
+    const chartContexts = chartConfigs.map(cfg => {
+      const canvas = document.getElementById(cfg.id);
+      return { canvas, ctx: canvas ? canvas.getContext('2d') : null, cfg };
+    });
 
     /**
      * Add a new empty row to the table. All inputs are set up
@@ -360,7 +394,7 @@
       recalcPercentages();
       recalcWorkingDays();
       updateFooterTotals();
-      updatePlanChart();
+      updateLineCharts();
     }
 
     /**
@@ -549,9 +583,9 @@
     }
 
     /**
-     * Build a sorted series of total Cutting Plan values grouped by week.
+     * Build a sorted series of weekly totals for the provided plan and actual columns.
      */
-    function buildPlanSeries() {
+    function buildPlanActualSeries(planIndex, actualIndex) {
       const buckets = new Map();
       Array.from(tableBody.children).forEach(row => {
         const dateInput = row.cells[1].querySelector('input');
@@ -559,78 +593,129 @@
         const date = parseDateStr(dateStr);
         if (!date) return;
         const weekLabel = row.cells[0].textContent || getWeekLabel(dateStr);
-        const cutPlan = parseInt(row.cells[4].querySelector('input').value) || 0;
+        const planVal = parseInt(row.cells[planIndex].querySelector('input').value) || 0;
+        const actVal = parseInt(row.cells[actualIndex].querySelector('input').value) || 0;
         const startDate = getWeekStartDate(date);
         const key = `${weekLabel}-${startDate.toISOString()}`;
         if (!buckets.has(key)) {
-          buckets.set(key, { label: weekLabel, total: 0, order: startDate.getTime() });
+          buckets.set(key, {
+            label: weekLabel,
+            plan: 0,
+            actual: 0,
+            order: startDate.getTime()
+          });
         }
-        buckets.get(key).total += cutPlan;
+        const bucket = buckets.get(key);
+        bucket.plan += planVal;
+        bucket.actual += actVal;
       });
       return Array.from(buckets.values()).sort((a, b) => a.order - b.order);
     }
 
     /**
-     * Render a simple line chart showing weekly Cutting Plan totals.
+     * Render a plan vs actual line chart into the provided canvas context.
      */
-    function updatePlanChart() {
-      if (!planCtx) return;
-      const series = buildPlanSeries();
-      const width = planChart.width;
-      const height = planChart.height;
-      planCtx.clearRect(0, 0, width, height);
+    function renderLineChart(ctx, canvas, series, title) {
+      if (!ctx || !canvas) return;
+      const width = canvas.width;
+      const height = canvas.height;
+      ctx.clearRect(0, 0, width, height);
 
       if (series.length === 0) {
-        planCtx.fillStyle = '#666';
-        planCtx.font = '12px Arial';
-        planCtx.fillText('Add data to see production plan chart', 10, 24);
+        ctx.fillStyle = '#666';
+        ctx.font = '12px Arial';
+        ctx.fillText('Add data to see plan vs actual', 10, 24);
         return;
       }
 
-      const padding = 32;
-      const maxVal = Math.max(...series.map(p => p.total), 0);
+      const padding = 36;
+      const maxVal = Math.max(...series.map(p => Math.max(p.plan, p.actual)), 0);
       const usableHeight = height - padding * 2;
       const usableWidth = width - padding * 2;
       const yScale = maxVal > 0 ? usableHeight / maxVal : 0;
       const xStep = series.length > 1 ? usableWidth / (series.length - 1) : 0;
+      const yFor = value => height - padding - (yScale > 0 ? value * yScale : 0);
 
       // Axes
-      planCtx.strokeStyle = '#ccc';
-      planCtx.lineWidth = 1;
-      planCtx.beginPath();
-      planCtx.moveTo(padding, padding);
-      planCtx.lineTo(padding, height - padding);
-      planCtx.lineTo(width - padding, height - padding);
-      planCtx.stroke();
+      ctx.strokeStyle = '#ccc';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padding, padding);
+      ctx.lineTo(padding, height - padding);
+      ctx.lineTo(width - padding, height - padding);
+      ctx.stroke();
 
-      // Plot line
-      planCtx.strokeStyle = '#007bff';
-      planCtx.lineWidth = 2;
-      planCtx.beginPath();
+      // Plot plan line
+      ctx.strokeStyle = '#007bff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
       series.forEach((point, idx) => {
         const x = padding + idx * xStep;
-        const y = height - padding - (yScale > 0 ? point.total * yScale : 0);
-        if (idx === 0) planCtx.moveTo(x, y);
-        else planCtx.lineTo(x, y);
+        const y = yFor(point.plan);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
       });
-      planCtx.stroke();
+      ctx.stroke();
+
+      // Plot actual line
+      ctx.strokeStyle = '#2e8b57';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      series.forEach((point, idx) => {
+        const x = padding + idx * xStep;
+        const y = yFor(point.actual);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
 
       // Plot points and labels
-      planCtx.fillStyle = '#007bff';
-      planCtx.font = '11px Arial';
+      ctx.font = '11px Arial';
       series.forEach((point, idx) => {
         const x = padding + idx * xStep;
-        const y = height - padding - (yScale > 0 ? point.total * yScale : 0);
-        planCtx.beginPath();
-        planCtx.arc(x, y, 3, 0, Math.PI * 2);
-        planCtx.fill();
-        planCtx.fillText(point.label, x - 12, height - padding + 14);
+        const planY = yFor(point.plan);
+        const actY = yFor(point.actual);
+
+        ctx.fillStyle = '#007bff';
+        ctx.beginPath();
+        ctx.arc(x, planY, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#2e8b57';
+        ctx.beginPath();
+        ctx.arc(x, actY, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#333';
+        ctx.fillText(point.label, x - 14, height - padding + 14);
       });
 
-      // Max value label
-      planCtx.fillStyle = '#333';
-      planCtx.fillText('Plan (Cutting)', padding, padding - 10);
-      planCtx.fillText(`${maxVal}`, 6, padding + 4);
+      // Title, legend, and max label
+      ctx.fillStyle = '#333';
+      ctx.font = '12px Arial';
+      ctx.fillText(title, padding, padding - 12);
+      ctx.fillText(`${maxVal}`, 6, padding + 6);
+
+      const legendY = padding - 12;
+      const legendX = width - padding - 110;
+      ctx.fillStyle = '#007bff';
+      ctx.fillRect(legendX, legendY - 8, 10, 10);
+      ctx.fillStyle = '#333';
+      ctx.fillText('Plan', legendX + 14, legendY);
+      ctx.fillStyle = '#2e8b57';
+      ctx.fillRect(legendX + 52, legendY - 8, 10, 10);
+      ctx.fillStyle = '#333';
+      ctx.fillText('Actual', legendX + 66, legendY);
+    }
+
+    /**
+     * Update all plan vs actual line charts (Cutting, Stitching, Lasting).
+     */
+    function updateLineCharts() {
+      chartContexts.forEach(({ ctx, canvas, cfg }) => {
+        const series = buildPlanActualSeries(cfg.planIndex, cfg.actualIndex);
+        renderLineChart(ctx, canvas, series, cfg.title);
+      });
     }
 
     /**
