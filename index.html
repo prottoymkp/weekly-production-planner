@@ -36,6 +36,73 @@
       margin-right: 5px;
     }
 
+    .month-picker-input {
+      width: 140px;
+      cursor: pointer;
+      background-color: #fff;
+    }
+
+    .month-calendar {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+      padding: 8px;
+      border-radius: 4px;
+      width: 240px;
+      z-index: 10;
+    }
+
+    .month-calendar.hidden {
+      display: none;
+    }
+
+    .month-calendar header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      gap: 8px;
+    }
+
+    .month-calendar .year-label {
+      font-weight: bold;
+      flex: 1;
+      text-align: center;
+    }
+
+    .month-calendar button {
+      margin: 0;
+    }
+
+    .month-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .month-grid button {
+      padding: 8px 6px;
+      background: #f7f7f7;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .month-grid button:hover,
+    .month-grid button:focus {
+      outline: none;
+      background: #e7f0ff;
+      border-color: #b3d1ff;
+    }
+
+    .month-grid .current-month {
+      background: #007bff;
+      color: #fff;
+      border-color: #007bff;
+    }
+
     .numeric-input {
       width: 80px;
     }
@@ -92,7 +159,14 @@
   <body>
   <div id="toolbar">
     <label for="monthPicker">Month: </label>
-    <input id="monthPicker" type="month" aria-label="Filter charts by month" />
+    <input
+      id="monthPicker"
+      type="text"
+      class="month-picker-input"
+      aria-label="Filter charts by month"
+      placeholder="YYYY-MM"
+      readonly
+    />
     <button id="addRowBtn">Add Row</button>
     <button id="add10RowsBtn">Add 10 Rows</button>
     <button id="sampleDataBtn" type="button">Sample Data</button>
@@ -168,6 +242,7 @@
     const exportBtn = document.getElementById('exportBtn');
     const monthPicker = document.getElementById('monthPicker');
     let selectedMonth = '';
+    let calendarYear = new Date().getFullYear();
     const chartConfigs = [
       { id: 'cutChart', planIndex: 4, actualIndex: 5, title: 'Plan vs Actual (Cutting)' },
       { id: 'stitchChart', planIndex: 7, actualIndex: 8, title: 'Plan vs Actual (Sewing)' },
@@ -177,6 +252,105 @@
       const canvas = document.getElementById(cfg.id);
       return { canvas, ctx: canvas ? canvas.getContext('2d') : null, cfg };
     });
+
+    const monthCalendar = buildMonthCalendar();
+    document.body.appendChild(monthCalendar.container);
+
+    function buildMonthCalendar() {
+      const container = document.createElement('div');
+      container.className = 'month-calendar hidden';
+      container.setAttribute('role', 'dialog');
+      container.setAttribute('aria-label', 'Choose a month');
+
+      const header = document.createElement('header');
+      const prevBtn = document.createElement('button');
+      prevBtn.type = 'button';
+      prevBtn.textContent = '◀';
+      prevBtn.addEventListener('click', () => {
+        renderMonthCalendar(calendarYear - 1);
+      });
+
+      const yearLabel = document.createElement('div');
+      yearLabel.className = 'year-label';
+      yearLabel.textContent = calendarYear;
+
+      const nextBtn = document.createElement('button');
+      nextBtn.type = 'button';
+      nextBtn.textContent = '▶';
+      nextBtn.addEventListener('click', () => {
+        renderMonthCalendar(calendarYear + 1);
+      });
+
+      header.appendChild(prevBtn);
+      header.appendChild(yearLabel);
+      header.appendChild(nextBtn);
+      container.appendChild(header);
+
+      const grid = document.createElement('div');
+      grid.className = 'month-grid';
+
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthButtons = months.map((name, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = name;
+        btn.addEventListener('click', () => {
+          applySelectedMonth(formatMonthValue(calendarYear, idx));
+          closeMonthCalendar();
+        });
+        grid.appendChild(btn);
+        return btn;
+      });
+
+      container.appendChild(grid);
+
+      return { container, yearLabel, monthButtons };
+    }
+
+    function formatMonthValue(year, monthIndex) {
+      return `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+    }
+
+    function applySelectedMonth(value, updateInput = true) {
+      selectedMonth = value;
+      if (updateInput) {
+        monthPicker.value = value;
+      }
+      updateLineCharts();
+    }
+
+    function getParsedMonth(value) {
+      if (!value || !/^\d{4}-\d{2}$/.test(value)) return null;
+      const [yearStr, monthStr] = value.split('-');
+      const year = parseInt(yearStr, 10);
+      const monthIndex = parseInt(monthStr, 10) - 1;
+      if (isNaN(year) || isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) return null;
+      return { year, monthIndex };
+    }
+
+    function renderMonthCalendar(year) {
+      calendarYear = year;
+      monthCalendar.yearLabel.textContent = year;
+      const parsed = getParsedMonth(selectedMonth);
+      const activeMonth = parsed ? parsed.monthIndex : new Date().getMonth();
+      monthCalendar.monthButtons.forEach((btn, idx) => {
+        btn.classList.toggle('current-month', idx === activeMonth && year === (parsed ? parsed.year : new Date().getFullYear()));
+      });
+    }
+
+    function openMonthCalendar() {
+      const parsed = getParsedMonth(monthPicker.value) || { year: new Date().getFullYear(), monthIndex: new Date().getMonth() };
+      renderMonthCalendar(parsed.year);
+      const rect = monthPicker.getBoundingClientRect();
+      monthCalendar.container.style.top = `${rect.bottom + window.scrollY + 4}px`;
+      monthCalendar.container.style.left = `${rect.left + window.scrollX}px`;
+      monthCalendar.container.classList.remove('hidden');
+      monthCalendar.monthButtons[parsed.monthIndex].focus();
+    }
+
+    function closeMonthCalendar() {
+      monthCalendar.container.classList.add('hidden');
+    }
 
     /**
      * Add a new empty row to the table. All inputs are set up
@@ -974,9 +1148,30 @@
     exportBtn.addEventListener('click', function() {
       exportTable();
     });
+    monthPicker.addEventListener('focus', openMonthCalendar);
+    monthPicker.addEventListener('click', openMonthCalendar);
+    monthPicker.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openMonthCalendar();
+      } else if (event.key === 'Escape') {
+        closeMonthCalendar();
+      }
+    });
     monthPicker.addEventListener('input', function(event) {
-      selectedMonth = event.target.value;
-      updateLineCharts();
+      applySelectedMonth(event.target.value, false);
+    });
+
+    document.addEventListener('click', function(event) {
+      if (!monthCalendar.container.contains(event.target) && event.target !== monthPicker) {
+        closeMonthCalendar();
+      }
+    });
+
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'Escape') {
+        closeMonthCalendar();
+      }
     });
   });
   </script>
