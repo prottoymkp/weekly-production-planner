@@ -322,6 +322,8 @@
     const userStatus = document.getElementById('userStatus');
     let selectedMonth = '';
     let calendarYear = new Date().getFullYear();
+    const STORAGE_KEY = 'weekly-production-planner-state';
+    let suppressPersistence = false;
     const chartConfigs = [
       { id: 'cutChart', planIndex: 4, actualIndex: 5, title: 'Plan vs Actual (Cutting)' },
       { id: 'stitchChart', planIndex: 7, actualIndex: 8, title: 'Plan vs Actual (Sewing)' },
@@ -489,6 +491,7 @@
         monthPicker.value = value;
       }
       updateLineCharts();
+      saveState();
     }
 
     function getParsedMonth(value) {
@@ -721,6 +724,80 @@
       recalcWorkingDays();
       updateFooterTotals();
       updateLineCharts();
+      saveState();
+    }
+
+    function getTableState() {
+      return Array.from(tableBody.children).map(row => ({
+        date: row.cells[1].querySelector('input').value,
+        article: row.cells[2].querySelector('input').value,
+        cutPlan: row.cells[4].querySelector('input').value,
+        cutAct: row.cells[5].querySelector('input').value,
+        stitchPlan: row.cells[7].querySelector('input').value,
+        stitchAct: row.cells[8].querySelector('input').value,
+        lastPlan: row.cells[10].querySelector('input').value,
+        lastAct: row.cells[11].querySelector('input').value,
+        remarks: row.cells[14].querySelector('input').value
+      }));
+    }
+
+    function saveState() {
+      if (suppressPersistence) return;
+      const state = {
+        selectedMonth,
+        monthPickerValue: monthPicker.value,
+        rows: getTableState()
+      };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (error) {
+        console.error('Unable to save plan to local storage', error);
+      }
+    }
+
+    function restoreTableState(state) {
+      if (!state || !Array.isArray(state.rows)) return false;
+      suppressPersistence = true;
+      clearRows();
+      state.rows.forEach(rowData => {
+        addRow();
+        const cells = tableBody.lastChild.cells;
+        cells[1].querySelector('input').value = rowData.date || '';
+        cells[2].querySelector('input').value = rowData.article || '';
+        cells[4].querySelector('input').value = rowData.cutPlan || 0;
+        cells[5].querySelector('input').value = rowData.cutAct || 0;
+        cells[7].querySelector('input').value = rowData.stitchPlan || 0;
+        cells[8].querySelector('input').value = rowData.stitchAct || 0;
+        cells[10].querySelector('input').value = rowData.lastPlan || 0;
+        cells[11].querySelector('input').value = rowData.lastAct || 0;
+        cells[14].querySelector('input').value = rowData.remarks || '';
+      });
+
+      const monthValue = state.selectedMonth || state.monthPickerValue || '';
+      if (monthValue) {
+        applySelectedMonth(monthValue);
+      }
+      suppressPersistence = false;
+      recalcAll();
+      return true;
+    }
+
+    function loadSavedState() {
+      let rawState = '';
+      try {
+        rawState = localStorage.getItem(STORAGE_KEY) || '';
+      } catch (error) {
+        console.error('Unable to read saved plan from local storage', error);
+        return false;
+      }
+      if (!rawState) return false;
+      try {
+        const parsed = JSON.parse(rawState);
+        return restoreTableState(parsed);
+      } catch (error) {
+        console.error('Unable to parse saved plan from local storage', error);
+        return false;
+      }
     }
 
     /**
@@ -1192,149 +1269,160 @@
      */
     function runTests() {
       const logs = [];
-      function assert(condition, message) {
-        if (!condition) {
-          console.error('Test failed:', message);
-          logs.push('FAIL: ' + message);
-        }
-      }
-      function isFutureDateStr(dateStr) {
-        const date = parseDateStr(dateStr);
-        if (!date) return false;
-        return isFutureDate(date);
-      }
-      // Populate with sample data for testing
-      const samples = buildSampleRows();
-      addSampleData();
-      const rows = Array.from(tableBody.children);
-      function getWeek(rowIndex) {
-        return rows[rowIndex].cells[0].textContent;
-      }
-
-      // 1. Sample size and date coverage
-      assert(rows.length === samples.length, `Sample data should produce ${samples.length} rows`);
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
-      const prevMonthKey = (() => {
-        const dt = new Date(currentYear, currentMonth - 1, 1);
-        return `${dt.getFullYear()}-${dt.getMonth()}`;
-      })();
-      const nextMonthKey = (() => {
-        const dt = new Date(currentYear, currentMonth + 1, 1);
-        return `${dt.getFullYear()}-${dt.getMonth()}`;
-      })();
-      const monthsCovered = new Set(samples.map(sample => {
-        const date = parseDateStr(sample.date);
-        return date ? `${date.getFullYear()}-${date.getMonth()}` : '';
-      }).filter(Boolean));
-      assert(monthsCovered.has(`${currentYear}-${currentMonth}`), 'Samples should include current month');
-      assert(monthsCovered.has(prevMonthKey), 'Samples should include previous month');
-      assert(monthsCovered.has(nextMonthKey), 'Samples should include next month');
-
-      // 2. Week computation
-      const expectedFirstWeek = getWeekLabel(samples[0].date);
-      assert(getWeek(0) === expectedFirstWeek, 'First row should reflect current month week label');
-
-      // 3. Order Quantity logic
-      function getOQ(rowIndex) {
-        return parseInt(rows[rowIndex].cells[3].textContent);
-      }
-      const oqBuckets = samples.reduce((acc, sample) => {
-        const date = parseDateStr(sample.date);
-        const key = `${sample.article.toLowerCase()}-${date.getFullYear()}-${date.getMonth()}`;
-        if (!acc[key]) {
-          acc[key] = { cut: 0, stitch: 0, last: 0 };
-        }
-        acc[key].cut += sample.cutPlan;
-        acc[key].stitch += sample.stitchPlan;
-        acc[key].last += sample.lastPlan;
-        return acc;
-      }, {});
-      const firstSampleKey = (() => {
-        const date = parseDateStr(samples[0].date);
-        return `${samples[0].article.toLowerCase()}-${date.getFullYear()}-${date.getMonth()}`;
-      })();
-      const expectedOQ = Math.max(...Object.values(oqBuckets[firstSampleKey]));
-      assert(getOQ(0) === expectedOQ, 'Order Quantity should match max of plan sums for the article/month');
-
-      // 4. Percentages
-      function getPct(rowIndex, colIndex) {
-        return rows[rowIndex].cells[colIndex].textContent;
-      }
-      const firstSample = samples[0];
-      const expectedCutPct = ((firstSample.cutAct / firstSample.cutPlan) * 100).toFixed(1) + '%';
-      const expectedStitchPct = ((firstSample.stitchAct / firstSample.stitchPlan) * 100).toFixed(1) + '%';
-      const expectedLastPct = ((firstSample.lastAct / firstSample.lastPlan) * 100).toFixed(1) + '%';
-      assert(getPct(0, 6) === expectedCutPct, 'Cutting% for first row should match calculated value');
-      assert(getPct(0, 9) === expectedStitchPct, 'Stitching% for first row should match calculated value');
-      assert(getPct(0, 12) === expectedLastPct, 'Lasting% for first row should match calculated value');
-
-      // 5. Future-dated rows should have zero actuals
-      samples.forEach((sample, idx) => {
-        if (!isFutureDateStr(sample.date)) return;
-        const row = rows[idx];
-        const cutAct = parseInt(row.cells[5].querySelector('input').value) || 0;
-        const stitchAct = parseInt(row.cells[8].querySelector('input').value) || 0;
-        const lastAct = parseInt(row.cells[11].querySelector('input').value) || 0;
-        assert(cutAct === 0, 'Future dates should set Cutting Actual to zero');
-        assert(stitchAct === 0, 'Future dates should set Stitching Actual to zero');
-        assert(lastAct === 0, 'Future dates should set Lasting Actual to zero');
-      });
-
-      // 6. Working Days (week)
-      function getWD(rowIndex) {
-        return parseInt(rows[rowIndex].cells[13].textContent);
-      }
-      function expectedWorkingDays(dateStr) {
-        const date = parseDateStr(dateStr);
-        const day = date.getDate();
-        const year = date.getFullYear();
-        const month = date.getMonth();
-        let start;
-        if (day <= 7) start = 1;
-        else if (day <= 14) start = 8;
-        else if (day <= 21) start = 15;
-        else if (day <= 28) start = 22;
-        else start = 29;
-        const end = Math.min(start + 6, daysInMonth(year, month));
-        let count = 0;
-        for (let d = start; d <= end; d++) {
-          const dt = new Date(year, month, d);
-          if (dt.getDay() !== 5) count++;
-        }
-        return count;
-      }
-      const expectedWD = expectedWorkingDays(samples[0].date);
-      assert(getWD(0) === expectedWD, 'Working days should match calculated week working days for first row');
-
-      // 7. Footer totals
-      const totals = {
-        cutPlan: parseInt(document.querySelector('.total-cut-plan').textContent),
-        cutAct: parseInt(document.querySelector('.total-cut-actual').textContent),
-        stitchPlan: parseInt(document.querySelector('.total-stitch-plan').textContent),
-        stitchAct: parseInt(document.querySelector('.total-stitch-actual').textContent),
-        lastPlan: parseInt(document.querySelector('.total-last-plan').textContent),
-        lastAct: parseInt(document.querySelector('.total-last-actual').textContent)
+      const previousState = {
+        rows: getTableState(),
+        selectedMonth,
+        monthPickerValue: monthPicker.value
       };
-      const expectedTotals = samples.reduce((acc, sample) => {
-        acc.cutPlan += sample.cutPlan;
-        acc.cutAct += sample.cutAct;
-        acc.stitchPlan += sample.stitchPlan;
-        acc.stitchAct += sample.stitchAct;
-        acc.lastPlan += sample.lastPlan;
-        acc.lastAct += sample.lastAct;
-        return acc;
-      }, { cutPlan: 0, cutAct: 0, stitchPlan: 0, stitchAct: 0, lastPlan: 0, lastAct: 0 });
+      suppressPersistence = true;
+      try {
+        function assert(condition, message) {
+          if (!condition) {
+            console.error('Test failed:', message);
+            logs.push('FAIL: ' + message);
+          }
+        }
+        function isFutureDateStr(dateStr) {
+          const date = parseDateStr(dateStr);
+          if (!date) return false;
+          return isFutureDate(date);
+        }
+        // Populate with sample data for testing
+        const samples = buildSampleRows();
+        addSampleData();
+        const rows = Array.from(tableBody.children);
+        function getWeek(rowIndex) {
+          return rows[rowIndex].cells[0].textContent;
+        }
 
-      assert(totals.cutPlan === expectedTotals.cutPlan, 'Total Cutting Plan should sum sample data');
-      assert(totals.cutAct === expectedTotals.cutAct, 'Total Cutting Actual should sum sample data');
-      assert(totals.stitchPlan === expectedTotals.stitchPlan, 'Total Stitching Plan should sum sample data');
-      assert(totals.stitchAct === expectedTotals.stitchAct, 'Total Stitching Actual should sum sample data');
-      assert(totals.lastPlan === expectedTotals.lastPlan, 'Total Lasting Plan should sum sample data');
-      assert(totals.lastAct === expectedTotals.lastAct, 'Total Lasting Actual should sum sample data');
+        // 1. Sample size and date coverage
+        assert(rows.length === samples.length, `Sample data should produce ${samples.length} rows`);
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        const prevMonthKey = (() => {
+          const dt = new Date(currentYear, currentMonth - 1, 1);
+          return `${dt.getFullYear()}-${dt.getMonth()}`;
+        })();
+        const nextMonthKey = (() => {
+          const dt = new Date(currentYear, currentMonth + 1, 1);
+          return `${dt.getFullYear()}-${dt.getMonth()}`;
+        })();
+        const monthsCovered = new Set(samples.map(sample => {
+          const date = parseDateStr(sample.date);
+          return date ? `${date.getFullYear()}-${date.getMonth()}` : '';
+        }).filter(Boolean));
+        assert(monthsCovered.has(`${currentYear}-${currentMonth}`), 'Samples should include current month');
+        assert(monthsCovered.has(prevMonthKey), 'Samples should include previous month');
+        assert(monthsCovered.has(nextMonthKey), 'Samples should include next month');
 
-      if (logs.length === 0) {
-        console.log('All tests passed');
+        // 2. Week computation
+        const expectedFirstWeek = getWeekLabel(samples[0].date);
+        assert(getWeek(0) === expectedFirstWeek, 'First row should reflect current month week label');
+
+        // 3. Order Quantity logic
+        function getOQ(rowIndex) {
+          return parseInt(rows[rowIndex].cells[3].textContent);
+        }
+        const oqBuckets = samples.reduce((acc, sample) => {
+          const date = parseDateStr(sample.date);
+          const key = `${sample.article.toLowerCase()}-${date.getFullYear()}-${date.getMonth()}`;
+          if (!acc[key]) {
+            acc[key] = { cut: 0, stitch: 0, last: 0 };
+          }
+          acc[key].cut += sample.cutPlan;
+          acc[key].stitch += sample.stitchPlan;
+          acc[key].last += sample.lastPlan;
+          return acc;
+        }, {});
+        const firstSampleKey = (() => {
+          const date = parseDateStr(samples[0].date);
+          return `${samples[0].article.toLowerCase()}-${date.getFullYear()}-${date.getMonth()}`;
+        })();
+        const expectedOQ = Math.max(...Object.values(oqBuckets[firstSampleKey]));
+        assert(getOQ(0) === expectedOQ, 'Order Quantity should match max of plan sums for the article/month');
+
+        // 4. Percentages
+        function getPct(rowIndex, colIndex) {
+          return rows[rowIndex].cells[colIndex].textContent;
+        }
+        const firstSample = samples[0];
+        const expectedCutPct = ((firstSample.cutAct / firstSample.cutPlan) * 100).toFixed(1) + '%';
+        const expectedStitchPct = ((firstSample.stitchAct / firstSample.stitchPlan) * 100).toFixed(1) + '%';
+        const expectedLastPct = ((firstSample.lastAct / firstSample.lastPlan) * 100).toFixed(1) + '%';
+        assert(getPct(0, 6) === expectedCutPct, 'Cutting% for first row should match calculated value');
+        assert(getPct(0, 9) === expectedStitchPct, 'Stitching% for first row should match calculated value');
+        assert(getPct(0, 12) === expectedLastPct, 'Lasting% for first row should match calculated value');
+
+        // 5. Future-dated rows should have zero actuals
+        samples.forEach((sample, idx) => {
+          if (!isFutureDateStr(sample.date)) return;
+          const row = rows[idx];
+          const cutAct = parseInt(row.cells[5].querySelector('input').value) || 0;
+          const stitchAct = parseInt(row.cells[8].querySelector('input').value) || 0;
+          const lastAct = parseInt(row.cells[11].querySelector('input').value) || 0;
+          assert(cutAct === 0, 'Future dates should set Cutting Actual to zero');
+          assert(stitchAct === 0, 'Future dates should set Stitching Actual to zero');
+          assert(lastAct === 0, 'Future dates should set Lasting Actual to zero');
+        });
+
+        // 6. Working Days (week)
+        function getWD(rowIndex) {
+          return parseInt(rows[rowIndex].cells[13].textContent);
+        }
+        function expectedWorkingDays(dateStr) {
+          const date = parseDateStr(dateStr);
+          const day = date.getDate();
+          const year = date.getFullYear();
+          const month = date.getMonth();
+          let start;
+          if (day <= 7) start = 1;
+          else if (day <= 14) start = 8;
+          else if (day <= 21) start = 15;
+          else if (day <= 28) start = 22;
+          else start = 29;
+          const end = Math.min(start + 6, daysInMonth(year, month));
+          let count = 0;
+          for (let d = start; d <= end; d++) {
+            const dt = new Date(year, month, d);
+            if (dt.getDay() !== 5) count++;
+          }
+          return count;
+        }
+        const expectedWD = expectedWorkingDays(samples[0].date);
+        assert(getWD(0) === expectedWD, 'Working days should match calculated week working days for first row');
+
+        // 7. Footer totals
+        const totals = {
+          cutPlan: parseInt(document.querySelector('.total-cut-plan').textContent),
+          cutAct: parseInt(document.querySelector('.total-cut-actual').textContent),
+          stitchPlan: parseInt(document.querySelector('.total-stitch-plan').textContent),
+          stitchAct: parseInt(document.querySelector('.total-stitch-actual').textContent),
+          lastPlan: parseInt(document.querySelector('.total-last-plan').textContent),
+          lastAct: parseInt(document.querySelector('.total-last-actual').textContent)
+        };
+        const expectedTotals = samples.reduce((acc, sample) => {
+          acc.cutPlan += sample.cutPlan;
+          acc.cutAct += sample.cutAct;
+          acc.stitchPlan += sample.stitchPlan;
+          acc.stitchAct += sample.stitchAct;
+          acc.lastPlan += sample.lastPlan;
+          acc.lastAct += sample.lastAct;
+          return acc;
+        }, { cutPlan: 0, cutAct: 0, stitchPlan: 0, stitchAct: 0, lastPlan: 0, lastAct: 0 });
+
+        assert(totals.cutPlan === expectedTotals.cutPlan, 'Total Cutting Plan should sum sample data');
+        assert(totals.cutAct === expectedTotals.cutAct, 'Total Cutting Actual should sum sample data');
+        assert(totals.stitchPlan === expectedTotals.stitchPlan, 'Total Stitching Plan should sum sample data');
+        assert(totals.stitchAct === expectedTotals.stitchAct, 'Total Stitching Actual should sum sample data');
+        assert(totals.lastPlan === expectedTotals.lastPlan, 'Total Lasting Plan should sum sample data');
+        assert(totals.lastAct === expectedTotals.lastAct, 'Total Lasting Actual should sum sample data');
+
+        if (logs.length === 0) {
+          console.log('All tests passed');
+        }
+      } finally {
+        suppressPersistence = false;
+        restoreTableState(previousState);
       }
     }
 
@@ -1362,6 +1450,7 @@
       XLSX.writeFile(wb, 'weekly_production_plan.xlsx');
     }
 
+    loadSavedState();
     loginForm.addEventListener('submit', function(event) {
       event.preventDefault();
       const username = loginForm.username.value.trim();
