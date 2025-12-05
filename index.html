@@ -321,6 +321,7 @@
     const loginError = document.getElementById('loginError');
     const userStatus = document.getElementById('userStatus');
     let selectedMonth = '';
+    let lastValidMonth = '';
     let calendarYear = new Date().getFullYear();
     const STORAGE_KEY = 'weekly-production-planner-state';
     let suppressPersistence = false;
@@ -486,9 +487,21 @@
     }
 
     function applySelectedMonth(value, updateInput = true) {
-      selectedMonth = value;
+      const parsed = value ? getParsedMonth(value) : null;
+      if (value && !parsed) {
+        monthPicker.setCustomValidity('Please enter a month in the format YYYY-MM.');
+        monthPicker.value = lastValidMonth;
+        if (updateInput) {
+          monthPicker.reportValidity();
+        }
+        return;
+      }
+
+      monthPicker.setCustomValidity('');
+      selectedMonth = value || '';
+      lastValidMonth = selectedMonth;
       if (updateInput) {
-        monthPicker.value = value;
+        monthPicker.value = selectedMonth;
       }
       updateLineCharts();
       saveState();
