@@ -4,25 +4,41 @@
   <meta charset="UTF-8">
   <title>Weekly Production Planner</title>
   <style>
+    :root {
+      --bg: #0f1115;
+      --surface: #161b22;
+      --surface-2: #1f2633;
+      --border: #2f3645;
+      --text: #e6e8ed;
+      --muted: #b3b7c2;
+      --accent: #7aa2f7;
+      --accent-strong: #4c82ff;
+      --danger: #f08c8c;
+      --shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+    }
+
     /* Basic styling for the planner */
     body {
       font-family: Arial, sans-serif;
+      color: var(--text);
+      background-color: var(--bg);
       margin: 20px;
     }
 
     table {
       width: 100%;
       border-collapse: collapse;
+      background: var(--surface);
     }
 
     th, td {
-      border: 1px solid #ccc;
+      border: 1px solid var(--border);
       padding: 4px;
       text-align: left;
     }
 
     th {
-      background-color: #f2f2f2;
+      background-color: var(--surface-2);
       position: sticky;
       top: 0;
       z-index: 1;
@@ -34,19 +50,39 @@
 
     button {
       margin-right: 5px;
+      background: var(--accent);
+      color: #0b1220;
+      border: 1px solid var(--accent-strong);
+      padding: 6px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      transition: background 0.2s ease, transform 0.1s ease;
+    }
+
+    button:hover,
+    button:focus {
+      outline: none;
+      background: var(--accent-strong);
+      transform: translateY(-1px);
     }
 
     .month-picker-input {
       width: 140px;
       cursor: pointer;
-      background-color: #fff;
+      background-color: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 8px;
+      border-radius: 4px;
     }
 
     .month-calendar {
       position: absolute;
-      background: #fff;
-      border: 1px solid #ccc;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
       padding: 8px;
       border-radius: 4px;
       width: 240px;
@@ -83,24 +119,25 @@
 
     .month-grid button {
       padding: 8px 6px;
-      background: #f7f7f7;
-      border: 1px solid #ddd;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
       border-radius: 3px;
       cursor: pointer;
       transition: background-color 0.2s ease, border-color 0.2s ease;
+      color: var(--text);
     }
 
     .month-grid button:hover,
     .month-grid button:focus {
       outline: none;
-      background: #e7f0ff;
-      border-color: #b3d1ff;
+      background: #23314a;
+      border-color: var(--accent);
     }
 
     .month-grid .current-month {
-      background: #007bff;
-      color: #fff;
-      border-color: #007bff;
+      background: var(--accent-strong);
+      color: #0b1220;
+      border-color: var(--accent-strong);
     }
 
     .numeric-input {
@@ -118,8 +155,12 @@
 
     .date-display {
       width: 150px;
-      background-color: #fff;
+      background-color: var(--surface);
       cursor: pointer;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 8px;
+      border-radius: 4px;
     }
 
     .native-date-input {
@@ -138,9 +179,9 @@
       max-width: 100%;
       overflow-x: auto;
       overflow-y: hidden;
-      background: #fff;
-      border: 1px solid #ddd;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
       padding: 8px;
       box-sizing: border-box;
     }
@@ -148,9 +189,9 @@
     .chart-panel {
       flex: 0 0 340px;
       padding: 6px;
-      border: 1px solid #eee;
+      border: 1px solid var(--border);
       border-radius: 4px;
-      background: #fafafa;
+      background: var(--surface-2);
     }
 
     .chart-panel h3 {
@@ -183,12 +224,13 @@
     }
 
     #loginBox {
-      background: #fff;
+      background: var(--surface-2);
       padding: 20px;
       border-radius: 6px;
       width: 320px;
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+      box-shadow: var(--shadow);
       box-sizing: border-box;
+      color: var(--text);
     }
 
     #loginBox h2 {
@@ -209,10 +251,14 @@
       box-sizing: border-box;
       margin-top: 4px;
       margin-bottom: 12px;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
     }
 
     #loginError {
-      color: #b00020;
+      color: var(--danger);
       min-height: 18px;
       margin-top: 6px;
     }
@@ -220,6 +266,29 @@
     #userStatus {
       margin-bottom: 12px;
       font-weight: bold;
+      color: var(--muted);
+    }
+
+    td input,
+    td textarea {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 8px;
+    }
+
+    td input:focus,
+    td textarea:focus,
+    .month-picker-input:focus,
+    .date-display:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(122, 162, 247, 0.2);
+    }
+
+    td textarea {
+      resize: vertical;
     }
   </style>
   <!-- SheetJS library for XLSX export -->
