@@ -902,7 +902,8 @@
 
       const cumulativePlan = series.reduce((sum, p) => sum + p.plan, 0);
       const cumulativeActual = series.reduce((sum, p) => sum + p.actual, 0);
-      ctx.fillText(`Cumulative Plan: ${cumulativePlan} | Actual: ${cumulativeActual}`, padding, height - 6);
+      const cumulativePct = cumulativePlan > 0 ? ((cumulativeActual / cumulativePlan) * 100).toFixed(1) + '%' : 'N/A';
+      ctx.fillText(`Cumulative Plan: ${cumulativePlan} | Actual: ${cumulativeActual} | Achievement: ${cumulativePct}`, padding, height - 6);
 
       const legendY = padding - 12;
       const legendX = width - padding - 110;
