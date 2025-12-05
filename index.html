@@ -89,8 +89,10 @@
        provided by the CDN fixes the issue. -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
-<body>
+  <body>
   <div id="toolbar">
+    <label for="monthPicker">Month: </label>
+    <input id="monthPicker" type="month" aria-label="Filter charts by month" />
     <button id="addRowBtn">Add Row</button>
     <button id="add10RowsBtn">Add 10 Rows</button>
     <button id="sampleDataBtn" type="button">Sample Data</button>
@@ -164,6 +166,8 @@
     const sampleDataBtn = document.getElementById('sampleDataBtn');
     const runTestsBtn = document.getElementById('runTestsBtn');
     const exportBtn = document.getElementById('exportBtn');
+    const monthPicker = document.getElementById('monthPicker');
+    let selectedMonth = '';
     const chartConfigs = [
       { id: 'cutChart', planIndex: 4, actualIndex: 5, title: 'Plan vs Actual (Cutting)' },
       { id: 'stitchChart', planIndex: 7, actualIndex: 8, title: 'Plan vs Actual (Sewing)' },
@@ -599,6 +603,12 @@
         const dateStr = dateInput ? dateInput.value : '';
         const date = parseDateStr(dateStr);
         if (!date) return;
+        if (selectedMonth) {
+          const [year, month] = selectedMonth.split('-').map(Number);
+          if (date.getFullYear() !== year || date.getMonth() + 1 !== month) {
+            return;
+          }
+        }
         const weekLabel = row.cells[0].textContent || getWeekLabel(dateStr);
         const planVal = parseInt(row.cells[planIndex].querySelector('input').value) || 0;
         const actVal = parseInt(row.cells[actualIndex].querySelector('input').value) || 0;
@@ -697,11 +707,15 @@
         ctx.fillText(point.label, x - 14, height - padding + 14);
       });
 
-      // Title, legend, and max label
+      // Title, legend, max label, and cumulative label
       ctx.fillStyle = '#333';
       ctx.font = '12px Arial';
       ctx.fillText(title, padding, padding - 12);
       ctx.fillText(`${maxVal}`, 6, padding + 6);
+
+      const cumulativePlan = series.reduce((sum, p) => sum + p.plan, 0);
+      const cumulativeActual = series.reduce((sum, p) => sum + p.actual, 0);
+      ctx.fillText(`Cumulative Plan: ${cumulativePlan} | Actual: ${cumulativeActual}`, padding, height - 6);
 
       const legendY = padding - 12;
       const legendX = width - padding - 110;
@@ -959,6 +973,10 @@
     });
     exportBtn.addEventListener('click', function() {
       exportTable();
+    });
+    monthPicker.addEventListener('input', function(event) {
+      selectedMonth = event.target.value;
+      updateLineCharts();
     });
   });
   </script>
