@@ -171,19 +171,42 @@
     }
 
     /* Plan chart styling */
-    #chartContainer {
+    #chartSection {
       width: min(1100px, calc(100% - 24px));
       margin: 16px auto 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      padding: 10px;
+      box-sizing: border-box;
+    }
+
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .chart-header h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .chart-filter {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #chartContainer {
+      margin-top: 8px;
       display: flex;
       gap: 12px;
       max-width: 100%;
       overflow-x: auto;
       overflow-y: hidden;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow);
-      padding: 8px;
-      box-sizing: border-box;
     }
 
     .chart-panel {
@@ -314,15 +337,6 @@
 
   <div id="userStatus" aria-live="polite"></div>
   <div id="toolbar">
-    <label for="monthPicker">Month: </label>
-    <input
-      id="monthPicker"
-      type="text"
-      class="month-picker-input"
-      aria-label="Filter charts by month"
-      placeholder="YYYY-MM"
-      readonly
-    />
     <button id="addRowBtn">Add Row</button>
     <button id="add10RowsBtn">Add 10 Rows</button>
     <button id="sampleDataBtn" type="button">Sample Data</button>
@@ -373,18 +387,34 @@
     </tfoot>
   </table>
 
-  <div id="chartContainer" aria-label="Production plan charts">
-    <div class="chart-panel" aria-label="Cutting performance chart">
-      <h3>Cutting</h3>
-      <canvas id="cutChart" width="340" height="200"></canvas>
+  <div id="chartSection" aria-label="Production plan charts">
+    <div class="chart-header">
+      <h2>Plan vs Actual Performance</h2>
+      <div class="chart-filter">
+        <label for="monthPicker">Month:</label>
+        <input
+          id="monthPicker"
+          type="text"
+          class="month-picker-input"
+          aria-label="Filter charts by month"
+          placeholder="YYYY-MM"
+          readonly
+        />
+      </div>
     </div>
-    <div class="chart-panel" aria-label="Sewing performance chart">
-      <h3>Sewing</h3>
-      <canvas id="stitchChart" width="340" height="200"></canvas>
-    </div>
-    <div class="chart-panel" aria-label="Lasting performance chart">
-      <h3>Lasting</h3>
-      <canvas id="lastChart" width="340" height="200"></canvas>
+    <div id="chartContainer">
+      <div class="chart-panel" aria-label="Cutting performance chart">
+        <h3>Cutting</h3>
+        <canvas id="cutChart" width="340" height="200"></canvas>
+      </div>
+      <div class="chart-panel" aria-label="Sewing performance chart">
+        <h3>Sewing</h3>
+        <canvas id="stitchChart" width="340" height="200"></canvas>
+      </div>
+      <div class="chart-panel" aria-label="Lasting performance chart">
+        <h3>Lasting</h3>
+        <canvas id="lastChart" width="340" height="200"></canvas>
+      </div>
     </div>
   </div>
 
