@@ -1298,8 +1298,15 @@
       const height = canvas.height;
       ctx.clearRect(0, 0, width, height);
 
+      const chartBackground = '#1f2633';
+      const textColor = '#e6e8ed';
+      const axisColor = '#9aa3b5';
+
+      ctx.fillStyle = chartBackground;
+      ctx.fillRect(0, 0, width, height);
+
       if (series.length === 0) {
-        ctx.fillStyle = '#666';
+        ctx.fillStyle = textColor;
         ctx.font = '12px Arial';
         ctx.fillText('Add data to see plan vs actual', 10, 24);
         return;
@@ -1314,7 +1321,7 @@
       const yFor = value => height - padding - (yScale > 0 ? value * yScale : 0);
 
       // Axes
-      ctx.strokeStyle = '#ccc';
+      ctx.strokeStyle = axisColor;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(padding, padding);
@@ -1363,12 +1370,12 @@
         ctx.arc(x, actY, 3, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = '#333';
+        ctx.fillStyle = textColor;
         ctx.fillText(point.label, x - 14, height - padding + 14);
       });
 
       // Title, legend, max label, and cumulative label
-      ctx.fillStyle = '#333';
+      ctx.fillStyle = textColor;
       ctx.font = '12px Arial';
       ctx.fillText(title, padding, padding - 12);
       ctx.fillText(`${maxVal}`, 6, padding + 6);
@@ -1382,11 +1389,11 @@
       const legendX = width - padding - 110;
       ctx.fillStyle = '#007bff';
       ctx.fillRect(legendX, legendY - 8, 10, 10);
-      ctx.fillStyle = '#333';
+      ctx.fillStyle = textColor;
       ctx.fillText('Plan', legendX + 14, legendY);
       ctx.fillStyle = '#2e8b57';
       ctx.fillRect(legendX + 52, legendY - 8, 10, 10);
-      ctx.fillStyle = '#333';
+      ctx.fillStyle = textColor;
       ctx.fillText('Actual', legendX + 66, legendY);
     }
 
